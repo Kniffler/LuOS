@@ -34,8 +34,10 @@ include_directories(
 	${CMAKE_CURRENT_LIST_DIR}
 )
 
+add_subdirectory(pico-vfs)
 add_subdirectory(i2ckbd)
 add_subdirectory(lcdspi)
+add_subdirectory(manager)
 
 add_executable(LUOS main.c)
 
@@ -48,7 +50,7 @@ target_link_libraries(LUOS
 	pico_unique_id
 	FreeRTOS-Kernel
 	FreeRTOS-Kernel-Heap4
-
+	
 	hardware_irq
 	hardware_adc
 	hardware_pwm
@@ -58,11 +60,19 @@ target_link_libraries(LUOS
 	hardware_exception
 	hardware_pio
 	pico_multicore
+
+	blockdevice_sd
+	filesystem_fat	
+	filesystem_vfs
+	
 	i2ckbd
 	lcdspi
+	manager
 )
 
 pico_enable_stdio_usb(LUOS 0)
 pico_enable_stdio_uart(LUOS 1)
 
 pico_add_extra_outputs(LUOS)
+
+# pico_enable_filesystem(${CMAKE_PROJECT_NAME})

@@ -53,7 +53,6 @@ void __not_in_flash_func(spi_finish)(spi_inst_t *spi) {
 }
 
 void set_font() {
-
     gui_font_width = MainFont[0];
     gui_font_height = MainFont[1];
 
@@ -426,9 +425,17 @@ void display_put_c(char c) {
 		}
 }
 
-/***
- *
-****////
+void lcd_set_colours(unsigned int fc, unsigned int bc) {
+	gui_fcolour = fc;
+	gui_bcolour = bc;
+}
+unsigned short lcd_get_s_height() {
+	return vres/gui_font_height;
+}
+unsigned short lcd_get_s_width() {
+	return hres/gui_font_width;
+}
+
 char lcd_put_char(char c, int flush) {
     lcd_putc(0, c);
     if (isprint(c)) lcd_char_pos++;
@@ -452,7 +459,7 @@ void lcd_reset_coords() {
 }
 ///////=----------------------------------------===//////
 void lcd_clear() {
-    draw_rect_spi(0, 0, hres - 1, vres - 1, BLACK);
+    draw_rect_spi(0, 0, hres - 1, vres - 1, gui_bcolour);
 }
 
 void lcd_putc(uint8_t devn, uint8_t c) {
@@ -724,7 +731,5 @@ void lcd_init() {
     pico_lcd_init();
 
     set_font();
-    gui_fcolour = GREEN;
-    gui_bcolour = BLACK;
-
+    lcd_set_colours(GREEN, BLACK);
 }
