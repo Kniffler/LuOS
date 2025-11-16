@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 11)
 
 project(manager
-	VERSION 0.0.1
 	DESCRIPTION "Manager for LUOS"
 )
 

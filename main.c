@@ -1,21 +1,9 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
-
-#include "blockdevice/sd.h"
-#include "filesystem/fat.h"
-#include "filesystem/vfs.h"
-
-//	Interface pins for the SD card
-#define SD_SPI0         0
-#define SD_SCLK_PIN     18
-#define SD_MOSI_PIN     19
-#define SD_MISO_PIN     16
-#define SD_CS_PIN       17
-#define SD_DET_PIN			22
-
 
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
@@ -23,92 +11,193 @@
 #include "i2ckbd.h"
 #include "lcdspi.h"
 #include "keyboard_define.h"
-#include "manager.h"
 
-const uint LEDPIN = 25;
+#define KBD_TASK_PRIORITY	12
+#define FONT_WIDTH 0x08
+#define FONT_HEIGHT 0x0C
 
-uint8_t sd_status;	//0 no sdcard ,1 has sd card
-bool sd_card_inserted(void)
-{
-	sd_status = !gpio_get(SD_DET_PIN);
-	return (bool)sd_status;
-}
+const unsigned int LEDPIN = 25;
 
-bool fs_init(void);
+uint16_t app_focus = 0;
+
 void all_init();
-static void kbd_handler_task(void *data);
-static void draw_handler_task(void *data);
 
-#define CHAR_WIDTH 0x08
-static char directiveCache[256][(LCD_WIDTH/CHAR_WIDTH)-1];
-//	Has to be constant, as such we need to know the resolution as well as the character width
-//	ahead of time. I have just copied the width entry from lcdspi/fonts/font1.h
-static unsigned short d_f = 0;	//	Short name for ease of typing, d_f = "directive_front"
+static void kbd_handler_task(void *data);
+bool is_printable_key(int key) { return key>31&&key<127; };
+
+static char directive[(LCD_WIDTH/FONT_WIDTH)-3] = {'\0'};
+static short cursor_pos = 0;
+static short d_w_x = 0;	// Directive Write x
+static short d_w_y = 0;	// Directive Write y
+
+static void directive_key_press(int key);
+static uint8_t directive_execute();
+static char directive_spacer[(LCD_WIDTH/FONT_WIDTH)+1];
+
+static void print_directive();
+
+static void insert_char(char *s, int i, char c);
+static void delete_char(char *s, int i);
+
 
 void main(void)
 {
 	all_init();
-	char msg[] = "Your mom\n";
-	lcd_print_string(msg);
 	
 	TaskHandle_t kbd_handler = NULL;
-	xTaskCreate(kbd_handler_task, "kbd_handler", 128, (void *) NULL, 16, &kbd_handler);
+	BaseType_t xReturned;
+	xReturned = xTaskCreate(kbd_handler_task, "kbd_handler", 128, (void *) NULL, KBD_TASK_PRIORITY, &kbd_handler);
+
+	for(int i = 0; i < LCD_WIDTH/FONT_WIDTH; i++)
+	{
+		directive_spacer[i] = '-';
+	}
+	directive_spacer[(LCD_WIDTH/FONT_WIDTH)] = '\0';
+	
+	lcd_clear();
+	lcd_reset_coords();
+	
+	print_directive();
+	d_w_x = lcd_get_current_x();
+	d_w_y = lcd_get_current_y();
+	
+	lcd_print_string("\n");
+	lcd_print_string(directive_spacer);
+	lcd_print_string("\n");
+
+	vTaskStartScheduler();
 }
 
-static void draw_handler_task(void *data)
+
+static uint8_t directive_execute()
 {
-	(void)data;
-	
-	vTaskDelete(NULL);
+	if(strcmp(directive, ".clear")==0)
+	{
+		lcd_clear();
+		lcd_reset_coords();
+		
+		// strcpy(directive, "\0");
+		// print_directive(); 
+		// No need to call these since the end of the function handles it.
+		lcd_print_string("\n");
+		lcd_print_string(directive_spacer);
+		lcd_print_string("\n");
+	}
+
+	strcpy(directive, "\0");
+	cursor_pos = 0;
+	return 0;
 }
+
+static void directive_key_press(int key)
+{
+	bool execute_at_end = false;
+	if(is_printable_key(key) && cursor_pos+1<(LCD_WIDTH/FONT_WIDTH))
+	{
+		insert_char(directive, cursor_pos++, (char)key);
+	}
+	
+	switch(key)
+	{
+		case KEY_HOME: app_focus = 0;	break;
+		case KEY_BACKSPACE:
+			if(cursor_pos==0) { delete_char(directive, cursor_pos); break; }
+			else if(cursor_pos-1<0) { break; }
+			
+			if(directive[cursor_pos-1]>0) { delete_char(directive, --cursor_pos); }
+			else if(directive[cursor_pos]>0) { delete_char(directive, cursor_pos); }
+			break;
+		case KEY_ENTER: execute_at_end = true; break;
+		case KEY_LEFT:
+			if(cursor_pos-1<0) { break; }
+			cursor_pos--;
+			break;
+		case KEY_RIGHT:
+			if(directive[cursor_pos]=='\0') { break; }
+			cursor_pos++;
+			break;
+		
+		
+		case KEY_UP:		break;
+		case KEY_DOWN:	break;
+	}
+	if(cursor_pos>(LCD_WIDTH/FONT_WIDTH)-3) { cursor_pos = (LCD_WIDTH/FONT_WIDTH)-2;}
+
+	if(execute_at_end) { directive_execute(); }
+	print_directive();
+}
+
+static void insert_char(char *s, int i, char c)
+{
+	for(int k = (LCD_WIDTH/FONT_WIDTH)-3; k >= i; k--)
+	{
+		// s[strlen(s)+1] looks extremely cursed to me I gotta be honest,
+		// but https://pythonexamples.org/c/how-to-insert-character-at-specific-index-in-string
+		// says otherwise. I've capped this in the initilization of k, just to be sure.
+		s[k+1] = s[k];
+	}
+	s[i] = c;
+}
+static void delete_char(char *s, int i)
+{
+	for(; i < strlen(s); i++)
+	{
+		if(i+1>=strlen(s)) { s[i] = '\0'; return; }
+		s[i] = s[i+1];
+	}
+}
+
+static void print_directive()
+{
+	draw_rect_spi(0, 0, LCD_WIDTH-1, FONT_HEIGHT, BLACK);	// Clear first row
+	
+	short temp_x = lcd_get_current_x();
+	short temp_y = lcd_get_current_y();
+	lcd_reset_coords();	// Temporarily draw first row
+	lcd_print_string(">");
+	
+	int i = 0;
+	for(; i < cursor_pos; i++)
+	{
+		lcd_putc(0, directive[i]);
+	}
+	lcd_putc(0, '\017');
+	
+	if(i>=strlen(directive))
+	{
+		lcd_putc(0, ' ');
+		lcd_putc(0, '\016');
+		return;
+	}
+	
+	lcd_putc(0, directive[i++]);
+	lcd_putc(0, '\016');
+	for(; i < strlen(directive); i++)
+	{
+		lcd_putc(0, directive[i]);
+	}
+	lcd_set_coords(temp_x, temp_y);	// Return to wherever we have drawn before
+}
+
+
 static void kbd_handler_task(void *data)
 {
-	(void)data;
-	
 	int key;
 	for(;;)
 	{
-		key = read_i2c_kbd(&key);
+		key = read_i2c_kbd();
+		if(key == -1) { continue; }
+		
+		switch(app_focus)
+		{
+			case 0: directive_key_press(key); break; 
+		}
 	}
 	vTaskDelete(NULL);
 }
 
 
 
-bool fs_init(void)
-{
-	if(!sd_card_inserted()) { return false; }
-	
-	// DEBUG_PRINT("fs init SD\n");
-	blockdevice_t *sd = blockdevice_sd_create(spi0,
-		SD_MOSI_PIN,
-		SD_MISO_PIN,
-		SD_SCLK_PIN,
-		SD_CS_PIN,
-		125000000 / 2 / 4, // 15.6MHz
-		true);
-	
-	filesystem_t *fat = filesystem_fat_create();
-	int err = fs_mount("/", fat, sd);
-	
-	if (err == -1)
-	{
-		// DEBUG_PRINT("format /\n");
-		err = fs_format(fat, sd);
-		if (err == -1)
-		{
-			// DEBUG_PRINT("format err: %s\n", strerror(errno));
-			return false;
-		}
-		err = fs_mount("/", fat, sd);
-		if (err == -1)
-		{
-			// DEBUG_PRINT("mount err: %s\n", strerror(errno));
-			return false;
-		}
-	}
-	return true;
-}
 
 void all_init()
 {
@@ -122,7 +211,6 @@ void all_init()
 
 	init_i2c_kbd();
 	lcd_init();
-	fs_init();
 	
 	gpio_init(LEDPIN);
 	gpio_set_dir(LEDPIN, GPIO_OUT);
@@ -130,12 +218,15 @@ void all_init()
 	gpio_put(LEDPIN, 1);
 	sleep_ms(1600);
 	
-	// lcd_set_colours(RGB(200, 0, 200), RGB(10, 5, 10));
-	lcd_set_colours(RGB(128, 0, 32), BLACK);
+	lcd_set_colours(WHITE, BLACK);
+	// lcd_set_colours(RGB(128, 0, 32), BLACK);
 	sleep_ms(200);
 	lcd_clear();
 	sleep_ms(200);
 }
+
+
+
 
 /*
 * These functions are requried for FreeRTOS to work in static memory mode.

@@ -122,9 +122,15 @@ extern char lcd_put_char(char c, int flush);
 extern void lcd_print_string(char* s);
 extern void lcd_reset_coords();
 
+//	Customs
 extern void lcd_set_colours(unsigned int fc, unsigned int bc);
-extern unsigned short lcd_get_s_height();
-extern unsigned short lcd_get_s_width();
+extern void lcd_clear_bottom();
+extern short lcd_get_current_x();
+extern short lcd_get_current_y();
+extern void lcd_set_coords(short x, short y);
+
+extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
+
 
 extern void lcd_spi_init();
 extern void lcd_init();

@@ -18,6 +18,9 @@ execute_process(
 	# We do this because my knowledge of submodules is limited and I would
 	#	like to avoid going through git hell for this one config to persist.
 	#	As such, we copy this config over each time, just to be sure.
+
+	# Alternatively, if you're on windows, comment out this procedure and 
+	# copy the file manually
 	COMMAND cp include/FreeRTOSConfig.h FreeRTOS/include/
 	WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
@@ -26,9 +29,11 @@ add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config SYSTEM INTERFACE include)
 target_compile_definitions(freertos_config INTERFACE projCOVERAGE_TEST=0)
 set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/FreeRTOS)
+
+# add_subdirectory(FreeRTOS)  only gives an error, instead we have it handled by:
 include(FreeRTOS_Kernel_import.cmake)
 
-
+#	
 
 include_directories(
 	${CMAKE_CURRENT_LIST_DIR}
@@ -37,7 +42,7 @@ include_directories(
 add_subdirectory(pico-vfs)
 add_subdirectory(i2ckbd)
 add_subdirectory(lcdspi)
-add_subdirectory(manager)
+# add_subdirectory(manager)
 
 add_executable(LUOS main.c)
 
@@ -67,7 +72,7 @@ target_link_libraries(LUOS
 	
 	i2ckbd
 	lcdspi
-	manager
+	# manager
 )
 
 pico_enable_stdio_usb(LUOS 0)

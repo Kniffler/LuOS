@@ -400,9 +400,14 @@ void display_put_c(char c) {
         case '\n':
             current_x = 0;
             current_y += gui_font_height;
+            /*
             if (current_y + gui_font_height >= vres) {
                 scroll_lcd_spi(current_y + gui_font_height - vres);
                 current_y -= (current_y + gui_font_height - vres);
+            }*/
+            // Change of plans
+            if (current_y >= vres) {
+            	lcd_reset_coords();
             }
             return;
         case '\t':
@@ -423,17 +428,6 @@ void display_put_c(char c) {
 		}else {
 			lcd_print_char(gui_fcolour, gui_bcolour, c, ORIENT_NORMAL);// print it
 		}
-}
-
-void lcd_set_colours(unsigned int fc, unsigned int bc) {
-	gui_fcolour = fc;
-	gui_bcolour = bc;
-}
-unsigned short lcd_get_s_height() {
-	return vres/gui_font_height;
-}
-unsigned short lcd_get_s_width() {
-	return hres/gui_font_width;
 }
 
 char lcd_put_char(char c, int flush) {
@@ -461,6 +455,28 @@ void lcd_reset_coords() {
 void lcd_clear() {
     draw_rect_spi(0, 0, hres - 1, vres - 1, gui_bcolour);
 }
+
+
+//	My custom functions
+
+
+void lcd_clear_below() {
+    draw_rect_spi(0, current_y, hres - 1, vres - 1, gui_bcolour);
+}
+void lcd_set_colours(unsigned int fc, unsigned int bc) {
+	gui_fcolour = fc;
+	gui_bcolour = bc;
+}
+short lcd_get_current_x() { return current_x; }
+short lcd_get_current_y() { return current_y; }
+
+void lcd_set_coords(short x, short y)
+{
+	current_x = x;
+	current_y = y;
+}
+
+//	Back to standard functions:
 
 void lcd_putc(uint8_t devn, uint8_t c) {
     display_put_c(c);
