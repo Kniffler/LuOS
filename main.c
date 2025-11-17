@@ -25,6 +25,13 @@ void all_init();
 static void kbd_handler_task(void *data);
 bool is_printable_key(int key) { return key>31&&key<127; };
 
+static char directive_history[64][(LCD_WIDTH/FONT_WIDTH)-3] = {'\0'};
+static char directive_changed_history[64][(LCD_WIDTH/FONT_WIDTH)-3] = {'\0'};
+static short history_pointer = 0;
+static short preview_pointer = 0;
+
+static void copy_directive_history();
+
 static char directive[(LCD_WIDTH/FONT_WIDTH)-3] = {'\0'};
 static short cursor_pos = 0;
 static short d_w_x = 0;	// Directive Write x
@@ -34,10 +41,10 @@ static void directive_key_press(int key);
 static uint8_t directive_execute();
 static char directive_spacer[(LCD_WIDTH/FONT_WIDTH)+1];
 
-static void print_directive();
+static void print_directive(uint8_t deb_num);
 
-static void insert_char(char *s, int i, char c);
-static void delete_char(char *s, int i);
+static void directive_char_insert(int i, char c);
+static void directive_char_delete(int i);
 
 
 void main(void)
@@ -57,9 +64,7 @@ void main(void)
 	lcd_clear();
 	lcd_reset_coords();
 	
-	print_directive();
-	d_w_x = lcd_get_current_x();
-	d_w_y = lcd_get_current_y();
+	print_directive(0);
 	
 	lcd_print_string("\n");
 	lcd_print_string(directive_spacer);
@@ -71,7 +76,15 @@ void main(void)
 
 static uint8_t directive_execute()
 {
-	if(strcmp(directive, ".clear")==0)
+	char *directive_subject = (history_pointer==preview_pointer) ? 
+		directive : directive_changed_history[preview_pointer];
+		
+	if(strlen(directive_subject)<=0) { return 1; }
+	
+	strcpy(directive_history[history_pointer++], directive_subject);
+	
+	
+	if(strcmp(directive_subject, ".clear")==0)
 	{
 		lcd_clear();
 		lcd_reset_coords();
@@ -84,28 +97,48 @@ static uint8_t directive_execute()
 		lcd_print_string("\n");
 	}
 
-	strcpy(directive, "\0");
-	cursor_pos = 0;
+	
+	if(history_pointer==preview_pointer)
+	{
+		cursor_pos = 0;
+		strcpy(directive, "\0");
+	}else
+	{
+		copy_directive_history();
+		cursor_pos = strlen(directive);
+	}
+	preview_pointer = history_pointer;
+	
 	return 0;
 }
 
 static void directive_key_press(int key)
-{
+{	
 	bool execute_at_end = false;
+	
 	if(is_printable_key(key) && cursor_pos+1<(LCD_WIDTH/FONT_WIDTH))
 	{
-		insert_char(directive, cursor_pos++, (char)key);
+		directive_char_insert(cursor_pos++, (char)key);
 	}
 	
 	switch(key)
 	{
 		case KEY_HOME: app_focus = 0;	break;
 		case KEY_BACKSPACE:
-			if(cursor_pos==0) { delete_char(directive, cursor_pos); break; }
+			if(cursor_pos==0) { directive_char_delete(cursor_pos); break; }
 			else if(cursor_pos-1<0) { break; }
 			
-			if(directive[cursor_pos-1]>0) { delete_char(directive, --cursor_pos); }
-			else if(directive[cursor_pos]>0) { delete_char(directive, cursor_pos); }
+			if(history_pointer==preview_pointer)
+			{
+				if(directive[cursor_pos-1]>0) { directive_char_delete(--cursor_pos); }
+				else if(directive[cursor_pos]>0) { directive_char_delete(cursor_pos); }
+			}else
+			{
+				if(directive_changed_history[preview_pointer][cursor_pos-1]>0)
+					{ directive_char_delete(--cursor_pos); }
+				else if(directive_changed_history[preview_pointer][cursor_pos]>0)
+					{ directive_char_delete(cursor_pos); }
+			}
 			break;
 		case KEY_ENTER: execute_at_end = true; break;
 		case KEY_LEFT:
@@ -117,66 +150,105 @@ static void directive_key_press(int key)
 			cursor_pos++;
 			break;
 		
-		
-		case KEY_UP:		break;
-		case KEY_DOWN:	break;
+		/*
+		case KEY_UP:
+			if(preview_pointer-1<0) { break; }
+			preview_pointer--;
+			cursor_pos = strlen(directive_changed_history[preview_pointer]);
+			break;
+		case KEY_DOWN:
+			if(preview_pointer+1>history_pointer) { break; }
+			preview_pointer++;
+			cursor_pos = strlen(directive_changed_history[preview_pointer]);
+			break;
+		*/
+		default: break;
 	}
 	if(cursor_pos>(LCD_WIDTH/FONT_WIDTH)-3) { cursor_pos = (LCD_WIDTH/FONT_WIDTH)-2;}
 
 	if(execute_at_end) { directive_execute(); }
-	print_directive();
+
+	print_directive(0);
 }
 
-static void insert_char(char *s, int i, char c)
+static void copy_directive_history()
 {
+	for(int i = 0; i < 64; i++)
+	{
+		strcpy(directive_changed_history[i], directive_history[i]);
+	}
+}
+
+static void directive_char_insert(int i, char c)
+{
+	char *directive_subject = (history_pointer==preview_pointer) ? 
+		directive : directive_changed_history[preview_pointer];
+	
 	for(int k = (LCD_WIDTH/FONT_WIDTH)-3; k >= i; k--)
 	{
 		// s[strlen(s)+1] looks extremely cursed to me I gotta be honest,
 		// but https://pythonexamples.org/c/how-to-insert-character-at-specific-index-in-string
 		// says otherwise. I've capped this in the initilization of k, just to be sure.
-		s[k+1] = s[k];
+
+		// Ignore my outdated comment above
+		directive_subject[k+1] = directive_subject[k];
 	}
-	s[i] = c;
+	directive_subject[i] = c;
+	
 }
-static void delete_char(char *s, int i)
+static void directive_char_delete(int i)
 {
-	for(; i < strlen(s); i++)
+	char *directive_subject = (history_pointer==preview_pointer) ? 
+		directive : directive_changed_history[preview_pointer];
+	
+	for(; i < strlen(directive_subject); i++)
 	{
-		if(i+1>=strlen(s)) { s[i] = '\0'; return; }
-		s[i] = s[i+1];
+		if(i+1>=strlen(directive_subject))
+			{ directive_subject[i] = '\0'; return; }
+		directive_subject[i] = directive_subject[i+1];
 	}
 }
 
-static void print_directive()
+static void print_directive(uint8_t deb_num)
 {
-	draw_rect_spi(0, 0, LCD_WIDTH-1, FONT_HEIGHT, BLACK);	// Clear first row
+	if(history_pointer!=preview_pointer)
+		{ lcd_print_string("Found ourselves printing in the past\n");}
+	else
+		{ lcd_print_string("Found ourselves printing in the present\n");}
+	/* TODO:
+		- Find out why THE FUCK THESE PRINT STATEMENTS DON'T WANNA WORK
+	*/
+	char *print_subject = (history_pointer==preview_pointer) ? 
+		directive : directive_changed_history[preview_pointer];
 	
-	short temp_x = lcd_get_current_x();
-	short temp_y = lcd_get_current_y();
+	// short temp_x = lcd_get_current_x();
+	// short temp_y = lcd_get_current_y();
 	lcd_reset_coords();	// Temporarily draw first row
+	draw_rect_spi(0, 0, LCD_WIDTH-1, FONT_HEIGHT, BLACK);	// Clear first row
 	lcd_print_string(">");
 	
 	int i = 0;
 	for(; i < cursor_pos; i++)
 	{
-		lcd_putc(0, directive[i]);
+		lcd_putc(0, print_subject[i]);
 	}
 	lcd_putc(0, '\017');
 	
-	if(i>=strlen(directive))
+	if(i>=strlen(print_subject))
 	{
 		lcd_putc(0, ' ');
 		lcd_putc(0, '\016');
 		return;
 	}
 	
-	lcd_putc(0, directive[i++]);
+	lcd_putc(0, print_subject[i++]);
 	lcd_putc(0, '\016');
-	for(; i < strlen(directive); i++)
+	for(; i < strlen(print_subject); i++)
 	{
-		lcd_putc(0, directive[i]);
+		lcd_putc(0, print_subject[i]);
 	}
-	lcd_set_coords(temp_x, temp_y);	// Return to wherever we have drawn before
+	// lcd_set_coords(temp_x, temp_y);	// Return to wherever we have drawn before
+	lcd_set_coords(0, FONT_HEIGHT*3);	// Return to wherever we have drawn before
 }
 
 

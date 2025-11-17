@@ -18,7 +18,7 @@ unsigned char *MainFont = (unsigned char *) font1;
 static int gui_fcolour;
 static int gui_bcolour;
 static bool gui_cSwap;	//	Colour swap
-static short current_x = 0, current_y = 0; // the current default position for the next char to be written
+static int current_x = 0, current_y = 0; // the current default position for the next char to be written
 static short gui_font_width, gui_font_height;
 static short hres = 0;
 static short vres = 0;
@@ -467,10 +467,10 @@ void lcd_set_colours(unsigned int fc, unsigned int bc) {
 	gui_fcolour = fc;
 	gui_bcolour = bc;
 }
-short lcd_get_current_x() { return current_x; }
-short lcd_get_current_y() { return current_y; }
+int lcd_get_current_x() { return current_x; }
+int lcd_get_current_y() { return current_y; }
 
-void lcd_set_coords(short x, short y)
+void lcd_set_coords(int x, int y)
 {
 	current_x = x;
 	current_y = y;
