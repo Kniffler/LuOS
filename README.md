@@ -78,4 +78,18 @@ The submodules are utilized almost exactly as they are in the [official PicoCalc
 
 # Credits
 In terms of libraries and resources of others, I have in included the [FreeRTOS submodule from raspberrypi](https://github.com/raspberrypi/FreeRTOS-Kernel) in order to get FreeRTOS, and the ```lcdspi``` and ```i2ckbd``` folders/libraries from the [official PicoCalc repository](https://github.com/clockworkpi/PicoCalc).
+
 There is also [this repository](https://github.com/Wilkua/pi-pico-freertos-starter) by the user Wilkua, which I have used as a basis for actually getting FreeRTOS to run. The config file for FreeRTOS was also copied from this repo. Please check it out if you'd like to make a project like this on your own.
+
+# TODO
+### Change directive_print to use lcd_print_string
+For now, the function is using lcd_putc to print the directive, however this messes with the lcd_char_pos variable in lcdspi.c. I have no idea how critical that variable is, aside from its definition it only seems to be used twice, but it may be that that messes with the entire drawing protocol. As a solution, although it is painful, I will change the directive_print() function to use lcd_print_string() for singular characters, in the hopes that the visual glitches on the picocalc will diminish.
+
+### Add directive history 
+Currently, the directive history, while recorded, doesn't seem to work properly. My best guess is that the pointers don't point where they should, but there is no evidence to suggest that. It's far more likely I'm accessing memory that I shouldn't, however I don't know where. Another possibility is that I simply forgot to erase a few debug lines here and there that just erase the history, the most likely culprit in that regard is copy_directive_history() since it copie's the directive history into a memory area that is allowed to be changed, and there are about 4 entry points into this system that, if any of them don't work, won't display the correct directive - or any for that matter.
+An entry point being a point in the code that interferes with the variables directive_history and directive_changed_history. Especially the latter.
+
+
+
+
+
