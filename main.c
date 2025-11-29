@@ -67,6 +67,7 @@ void main(void)
 	
 	print_directive(0);
 	
+	lcd_print_string("\n");
 	lcd_print_string(directive_spacer);
 	lcd_print_string("\n");
 
@@ -77,7 +78,7 @@ void main(void)
 static uint8_t directive_execute()
 {
 	/*	The ordering of conditions in this function
-		is highly delicate, 
+		is highly delicate, do not touch
 	*/
 	char *directive_subject = (history_pointer==preview_pointer) ? 
 		directive : directive_changed_history[preview_pointer];
