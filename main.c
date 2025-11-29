@@ -39,7 +39,7 @@ static short cursor_pos = 0;
 
 static void directive_key_press(int key);
 static uint8_t directive_execute();
-static char directive_spacer[DIR_LEN-1];
+static char directive_spacer[DIR_LEN];
 
 static void print_directive(uint8_t deb_num);
 
@@ -56,11 +56,11 @@ void main(void)
 	xReturned = xTaskCreate(kbd_handler_task, "kbd_handler", 128, (void *) NULL, KBD_TASK_PRIORITY, &kbd_handler);
 
 
-	for(int i = 0; i < DIR_LEN-1; i++)
+	for(int i = 0; i < DIR_LEN; i++)
 	{
 		directive_spacer[i] = '-';
 	}
-	// directive_spacer[DIR_LEN-2] = '-';
+	directive_spacer[DIR_LEN-1] = '\0';
 	
 	lcd_clear();
 	lcd_reset_coords();
@@ -68,7 +68,7 @@ void main(void)
 	print_directive(0);
 	
 	lcd_print_string(directive_spacer);
-	lcd_print_string("\b \b\n");
+	lcd_print_string("\n");
 
 	vTaskStartScheduler();
 }
@@ -76,21 +76,20 @@ void main(void)
 
 static uint8_t directive_execute()
 {
+	/*	The ordering of conditions in this function
+		is highly delicate, 
+	*/
 	char *directive_subject = (history_pointer==preview_pointer) ? 
 		directive : directive_changed_history[preview_pointer];
 		
 	if(strlen(directive_subject)<=0) { return 1; }
-	
-	strcpy(directive_history[history_pointer++], directive_subject);
+
 	
 	if(strcmp(directive_subject, ".clear")==0)
 	{
 		lcd_clear();
 		lcd_reset_coords();
-		
-		// strcpy(directive, "\0");
-		// print_directive(); 
-		// No need to call these since the end of the function handles it.
+
 		lcd_print_string("\n");
 		lcd_print_string(directive_spacer);
 		lcd_print_string("\n");
@@ -99,16 +98,29 @@ static uint8_t directive_execute()
 		lcd_print_string(directive_spacer);
 	}
 
+
+	bool is_not_repeating = history_pointer<1||strcmp(directive_subject, directive_history[history_pointer-1])!=0;
+	
+	//	Only save non-repeating directives, for ease of navigation
+	if(is_not_repeating)
+	{
+		strcpy(directive_history[history_pointer], directive_subject);
+		strcpy(directive_changed_history[history_pointer], directive_subject);
+		
+	}
 	
 	if(history_pointer==preview_pointer)
 	{
 		cursor_pos = 0;
-		strcpy(directive, "\0");
+		strcpy(directive, '\0');
 	}else
 	{
-		copy_directive_history();
 		cursor_pos = strlen(directive);
+		copy_directive_history();
 	}
+	
+	if(is_not_repeating) { history_pointer++; }
+	
 	preview_pointer = history_pointer;
 	
 	return 0;
@@ -147,7 +159,7 @@ static void directive_key_press(int key)
 			cursor_pos++;
 			break;
 		
-		/*
+		
 		case KEY_UP:
 			if(preview_pointer-1<0) { break; }
 			preview_pointer--;
@@ -158,7 +170,7 @@ static void directive_key_press(int key)
 			preview_pointer++;
 			cursor_pos = strlen(directive_changed_history[preview_pointer]);
 			break;
-		*/
+		
 		default: break;
 	}
 	if(cursor_pos>DIR_LEN-3) { cursor_pos = DIR_LEN-3;}
@@ -208,11 +220,12 @@ static void directive_char_delete(int i)
 
 static void print_directive(uint8_t deb_num)
 {
+	/*
 	if(history_pointer!=preview_pointer)
 		{ lcd_print_string("Found ourselves printing in the past\n");}
 	else
 		{ lcd_print_string("Found ourselves printing in the present\n");}
-	
+	*/
 	char *print_subject = (history_pointer==preview_pointer) ? 
 		directive : directive_changed_history[preview_pointer];
 	
@@ -226,11 +239,17 @@ static void print_directive(uint8_t deb_num)
 	directive_char_insert(cursor_pos+2, '\016');
 	
 	lcd_print_string(print_subject);
-	lcd_print_string(" \016\b\b\b\b\b");
+
+	if(strlen(print_subject)<=DIR_LEN-1) { lcd_print_string(" "); }
+	
+	lcd_print_string("\016\n");
 	
 	directive_char_delete(cursor_pos);
 	directive_char_delete(cursor_pos+1);
-	
+	/*
+	lcd_print_string(directive_spacer);
+	lcd_print_string("\n");
+	*/
 	lcd_set_coords(temp_x, temp_y);	// Return to wherever we have drawn before
 	fflush(stdout);
 }
