@@ -42,6 +42,7 @@ include_directories(
 add_subdirectory(pico-vfs)
 add_subdirectory(i2ckbd)
 add_subdirectory(lcdspi)
+add_subdirectory(director)
 # add_subdirectory(manager)
 
 add_executable(LUOS main.c)
@@ -64,6 +65,7 @@ target_link_libraries(LUOS
 	hardware_dma
 	hardware_exception
 	hardware_pio
+	hardware_gpio
 	pico_multicore
 
 	blockdevice_sd
@@ -72,6 +74,7 @@ target_link_libraries(LUOS
 	
 	i2ckbd
 	lcdspi
+	director
 	# manager
 )
 

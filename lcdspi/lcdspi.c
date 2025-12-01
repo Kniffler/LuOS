@@ -19,6 +19,7 @@ static int gui_fcolour;
 static int gui_bcolour;
 static bool gui_cSwap;	//	Colour swap
 static int current_x = 0, current_y = 0; // the current default position for the next char to be written
+static int reset_x = 0, reset_y = 0;
 static short gui_font_width, gui_font_height;
 static short hres = 0;
 static short vres = 0;
@@ -408,7 +409,6 @@ void display_put_c(char c) {
             // Change of plans
             if (current_y >= vres) {
             	lcd_reset_coords();
-            	current_y += 2*gui_font_height;
             }
             return;
         case '\t':
@@ -449,8 +449,8 @@ void lcd_print_string(char *s) {
     fflush(stdout);
 }
 void lcd_reset_coords() {
-    current_x = 0;
-    current_y = 0;
+    current_x = reset_x;
+    current_y = reset_y;
 }
 ///////=----------------------------------------===//////
 void lcd_clear() {
@@ -475,6 +475,11 @@ void lcd_set_coords(int x, int y)
 {
 	current_x = x;
 	current_y = y;
+}
+void lcd_set_reset_current()
+{
+	reset_x = current_x;
+	reset_y = current_y;
 }
 
 //	Back to standard functions:

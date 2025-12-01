@@ -128,6 +128,7 @@ extern void lcd_clear_bottom();
 extern int lcd_get_current_x();
 extern int lcd_get_current_y();
 extern void lcd_set_coords(int x, int y);
+extern void lcd_set_reset_current();
 
 extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
 
