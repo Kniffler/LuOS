@@ -1,4 +1,3 @@
-
 #include "blockdevice/sd.h"
 #include "filesystem/fat.h"
 #include "filesystem/vfs.h"
@@ -12,6 +11,7 @@
 #define SD_DET_PIN			22
 
 uint8_t sd_status;	// 0 no sdcard, 1 has sd card
+
 bool sd_card_inserted(void)
 {
 	sd_status = !gpio_get(SD_DET_PIN);

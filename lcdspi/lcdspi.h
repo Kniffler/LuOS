@@ -1,6 +1,8 @@
 #ifndef LCDSPI_H
 #define LCDSPI_H
 #include "pico/multicore.h"
+#include "uthash/include/uthash.h"
+// #include "uthash.h"
 #include <hardware/spi.h>
 
 //#define LCD_SPI_SPEED   6000000
@@ -19,6 +21,9 @@
 #define LCD_WIDTH 320
 #define LCD_HEIGHT 320
 #endif
+
+#define FONT_WIDTH 0x08
+#define FONT_HEIGHT 0x0C
 
 #define PIXFMT_BGR 1
 
@@ -43,7 +48,7 @@
 
 #define ORIENT_NORMAL       0
 
-#define RGB(red, green, blue) (unsigned int) (((red & 0b11111111) << 16) | ((green  & 0b11111111) << 8) | (blue & 0b11111111))
+#define RGB(red, green, blue) (uint_t) (((red & 0b11111111) << 16) | ((green  & 0b11111111) << 8) | (blue & 0b11111111))
 #define WHITE               RGB(255,  255,  255) //0b1111
 #define YELLOW              RGB(255,  255,    0) //0b1110
 #define LILAC               RGB(255,  128,  255) //0b1101
@@ -100,6 +105,19 @@
 #define TRISCLR             -3
 #define TRISSET             -2
 
+typedef unsigned int uint_t;
+
+struct region
+{
+	uint_t start_x, start_y;	// Top left
+	uint_t end_x, end_y;			// Bottom right
+	
+	int current_x, current_y;	// Offset from start where we are printing
+	uint8_t is_printing_downward;
+};
+
+
+
 extern void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len);
 extern void __not_in_flash_func(spi_finish)(spi_inst_t *spi);
 extern void hw_read_spi(unsigned char *buff, int cnt);
@@ -114,21 +132,24 @@ extern void spi_write_cd(unsigned char command, int data, ...);
 extern void spi_write_data24(uint32_t data);
 
 extern void spi_draw_pixel(uint16_t x, uint16_t y, uint16_t color) ;
-extern void lcd_putc(uint8_t devn, uint8_t c);
+extern void lcd_putc(int rID, uint8_t devn, uint8_t c);
 extern int  lcd_getc(uint8_t devn);
 extern void lcd_sleeping(uint8_t devn);
 
-extern char lcd_put_char(char c, int flush);
-extern void lcd_print_string(char* s);
-extern void lcd_reset_coords();
+extern char lcd_put_char(int rID, char c, int flush);
+extern void lcd_print_string(int rID, char* s);
 
 //	Customs
-extern void lcd_set_colours(unsigned int fc, unsigned int bc);
-extern void lcd_clear_bottom();
+extern void lcd_reset_coords();
+extern void lcd_region_clear(int rID);
+extern int lcd_region_create(int start_x, int start_y, int end_x, int end_y, uint8_t print_downwards);
+extern void lcd_region_delete(int rID);
+
 extern int lcd_get_current_x();
 extern int lcd_get_current_y();
-extern void lcd_set_coords(int x, int y);
-extern void lcd_set_reset_current();
+extern void lcd_set_coords(int rID, int x, int y);
+
+extern void lcd_set_colours(uint_t fc, uint_t bc);
 
 extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
 
@@ -137,7 +158,7 @@ extern void lcd_spi_init();
 extern void lcd_init();
 extern void lcd_clear();
 extern void reset_controller(void);
-extern void pin_set_bit(int pin, unsigned int offset);
+extern void pin_set_bit(int pin, uint_t offset);
 
 
 #endif

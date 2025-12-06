@@ -11,6 +11,7 @@
 #include "i2ckbd.h"
 #include "lcdspi.h"
 #include "keyboard_define.h"
+// #include "manager.h"
 #include "director.h"
 
 
@@ -26,7 +27,7 @@ bool is_printable_key(int key) { return key>31&&key<127; };
 
 void main(void)
 {
-	app_focus = 0;
+	app_focused = 0;
 	all_init();
 	
 	/*TaskHandle_t kbd_handler = NULL;
@@ -35,7 +36,6 @@ void main(void)
 	xTaskCreate(kbd_handler_task, "kbd_handler", 128, (void *) NULL, KBD_TASK_PRIORITY, NULL);
 	//, &kbd_handler);
 
-	dir_init();
 	dir_clear();
 
 	vTaskStartScheduler();
@@ -49,9 +49,10 @@ static void kbd_handler_task(void *data)
 		key = read_i2c_kbd();
 		if(key == -1) { continue; }
 		
-		switch(app_focus)
+		// if(!(app_focused)||directive_write_referal)
+		if(!(app_focused))
 		{
-			case 0: directive_key_press(key); break; 
+			directive_key_press(key); 
 		}
 	}
 	vTaskDelete(NULL);
@@ -78,6 +79,8 @@ void all_init()
 	sleep_ms(200);
 	lcd_clear();
 	sleep_ms(200);
+	
+	dir_init();
 }
 
 

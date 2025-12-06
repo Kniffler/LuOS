@@ -12,14 +12,12 @@
 #include "lcdspi.h"
 #include "keyboard_define.h"
 
-#define FONT_WIDTH 0x08
-#define FONT_HEIGHT 0x0C
 #define CHAR_AREA ((LCD_WIDTH/FONT_WIDTH)*((LCD_HEIGHT/FONT_HEIGHT)-2))
 
 #define DIR_LEN ((LCD_WIDTH/FONT_WIDTH)-1+2)
 
 
-extern uint16_t app_focus;
+extern uint8_t app_focused;
 
 
 static char directive_history[64][DIR_LEN] = {'\0'};

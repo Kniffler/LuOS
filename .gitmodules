@@ -4,3 +4,6 @@
 [submodule "pico-vfs"]
 	path = pico-vfs
 	url = https://github.com/oyama/pico-vfs
+[submodule "uthash"]
+	path = uthash
+	url = https://github.com/troydhanson/uthash

@@ -10,18 +10,18 @@ add_library(manager INTERFACE)
 
 target_sources(manager INTERFACE manager.c )
 
+add_subdirectory(iowiz)
+
 target_link_libraries(manager INTERFACE 
 	pico_stdlib
-	hardware_flash
 	
 	hardware_timer
-	pico_unique_id
 	FreeRTOS-Kernel
 	FreeRTOS-Kernel-Heap4
-	
-	pico_multicore
 	i2ckbd
 	lcdspi
+	
+	iowiz
 )
 
 target_include_directories(manager INTERFACE ${CMAKE_CURRENT_LIST_DIR})

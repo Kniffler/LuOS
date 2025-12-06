@@ -43,7 +43,7 @@ add_subdirectory(pico-vfs)
 add_subdirectory(i2ckbd)
 add_subdirectory(lcdspi)
 add_subdirectory(director)
-# add_subdirectory(manager)
+# add_subdirectory(apps)
 
 add_executable(LUOS main.c)
 

@@ -1,18 +1,23 @@
 #include "director.h"
 
-uint16_t app_focus = 0;
+uint8_t app_focused = 0;
+static int draw_rID;
+#define UART_CON uart0
+#define UART_TX 0
+#define UART_RX 1
+
 
 static void uart_test_task(void *data)
 {
-	uart_init(uart1, 115200);
-	uart_set_format(uart1, 8, 1, UART_PARITY_NONE);  // 8-E-1
+	uart_init(UART_CON, 115200);
+	uart_set_format(UART_CON, 8, 1, UART_PARITY_NONE);  // 8-E-1
 
-	uart_set_hw_flow(uart1, false, false);
+	uart_set_hw_flow(UART_CON, false, false);
 	
-	gpio_set_function(4, GPIO_FUNC_UART);
-	gpio_set_function(5, GPIO_FUNC_UART);
+	gpio_set_function(UART_TX, GPIO_FUNC_UART);
+	gpio_set_function(UART_RX, GPIO_FUNC_UART);
 	
-	uart_set_fifo_enabled(uart1, true);
+	uart_set_fifo_enabled(UART_CON, true);
 
 	static uint16_t buf_index = 0;
 	static uint8_t fifo_buffer[CHAR_AREA];
@@ -23,9 +28,9 @@ static void uart_test_task(void *data)
 	
 	for(;;)
 	{
-		while(uart_is_readable(uart1))
+		while(uart_is_readable(UART_CON))
 		{
-			char c = uart_getc(uart1);
+			char c = uart_getc(UART_CON);
 			last_read_time = time_us_32();
 
 			if(buf_index < CHAR_AREA-1)
@@ -43,7 +48,7 @@ static void uart_test_task(void *data)
 		if(buf_index>0 && (time_us_32() - last_read_time) > 64000)
 		{
 			for(int i = 0; i < buf_index; i++) {
-				lcd_put_char(fifo_buffer[i], 0);
+				lcd_put_char(draw_rID, fifo_buffer[i], 0);
 			}
 			buf_index = 0;
 		}
@@ -53,26 +58,19 @@ static void uart_test_task(void *data)
 
 void dir_init()
 {
-	for(int i = 0; i < DIR_LEN; i++)
+	for(int i = 0; i < DIR_LEN-1; i++)
 	{
 		directive_spacer[i] = '-';
 	}
 	directive_spacer[DIR_LEN-1] = '\0';
+	draw_rID = lcd_region_create(0, 0, LCD_WIDTH, FONT_HEIGHT*2, 1);
+	
 }
 
 void dir_clear()
 {
 	lcd_clear();
-	lcd_set_coords(0, 0);
-
 	print_directive(0);
-	lcd_print_string("\n");
-	// Necessary as the print_directive function returns to the previous point 
-	// of printing without making changes
-	
-	lcd_print_string(directive_spacer);
-	lcd_print_string("\n");
-	lcd_set_reset_current();
 }
 
 
@@ -94,7 +92,9 @@ static uint8_t directive_execute()
 		dir_clear();
 	}else if(strcmp(directive_subject, ".test")==0)
 	{
-		xTaskCreate(uart_test_task, "uart shittery", 128, (void *) NULL, 10, NULL);
+		// xTaskCreate(uart_test_task, "uart shittery", 128, (void *) NULL, 10, NULL);
+		lcd_print_string(draw_rID, "And now we write even more bs\n");
+		lcd_print_string(draw_rID, "Ohhh how about some moreee\n");
 	}
 
 
@@ -139,7 +139,7 @@ void directive_key_press(int key)
 	
 	switch(key)
 	{
-		case KEY_HOME: app_focus = 0;	break;
+		case KEY_HOME: app_focused = 0;	break;
 		case KEY_BACKSPACE:
 			if(cursor_pos==0) { directive_char_delete(cursor_pos); break; }
 			else if(cursor_pos-1<0) { break; }
@@ -221,25 +221,33 @@ static void print_directive(uint8_t deb_num)
 	char *print_subject = (history_pointer==preview_pointer) ? 
 		directive : directive_changed_history[preview_pointer];
 	
-	int temp_x = lcd_get_current_x();
-	int temp_y = lcd_get_current_y();
-	lcd_set_coords(0, 0);	// Temporarily draw first row
-	draw_rect_spi(0, 0, LCD_WIDTH-1, FONT_HEIGHT, BLACK);	// Clear first row
-	lcd_print_string(">");
+	lcd_reset_coords(draw_rID);
+	lcd_region_clear(draw_rID);
+
+	lcd_print_string(draw_rID, ">");
 
 	directive_char_insert(cursor_pos, '\017');
 	directive_char_insert(cursor_pos+2, '\016');
 	
-	lcd_print_string(print_subject);
+	lcd_print_string(draw_rID, print_subject);
 
-	if(strlen(print_subject)<=DIR_LEN-1) { lcd_print_string(" "); }
+	if(strlen(print_subject)<=DIR_LEN-1) { lcd_print_string(draw_rID, " "); }
 	
-	lcd_print_string("\016\n");
+	lcd_print_string(draw_rID, "\016\n");
 	
 	directive_char_delete(cursor_pos);
 	directive_char_delete(cursor_pos+1);
 	
-	lcd_set_coords(temp_x, temp_y);	// Return to wherever we have drawn before
+	lcd_print_string(draw_rID, directive_spacer);
 	fflush(stdout);
 }
+
+
+
+
+
+
+
+
+
 
