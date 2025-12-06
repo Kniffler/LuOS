@@ -52,38 +52,38 @@ Please consult the internet for instructions on how to get the following require
 
 ## Getting and building the project
 Assuming you met the dependencies earlier, you can now clone this repository locally using
-`
+```
 git clone https://github.com/Kniffler/LuOS
-`
+```
 or 
-`
+```
 gh repo clone Kniffler/LuOS
-`
+```
 if you have [github cli](https://cli.github.com/) installed.
 
 Now `cd` into the directory and finally run the build command. The build command is a little different depending on whether you have a raspberry pi pico h, pico w, pico 2h, or pico 2w.
 Here are the commands for each:
 
 pico h:
-`
+```
 cmake -B build -DPICO_BOARD=pico
 cd build
 make
-`
+```
 
 pico w:
-`
+```
 cmake -B build -DPICO_BOARD=pico_w
 cd build
 make
-`
+```
 
 pico 2/2w:
-`
+```
 cmake -B build -DPICO_BOARD=pico2
 cd build
 make
-`
+```
 
 And there you go! A finished uf2 file for your pico, ready to be flashed!
 
