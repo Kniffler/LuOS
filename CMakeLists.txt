@@ -9,78 +9,60 @@ project(LUOS C CXX ASM)
 
 pico_sdk_init()
 
-#	FreeRTOS
-
-execute_process(
-	#	Copy the config provided by:
-	# https://github.com/Wilkua/pi-pico-freertos-starter)
-	
-	# We do this because my knowledge of submodules is limited and I would
-	#	like to avoid going through git hell for this one config to persist.
-	#	As such, we copy this config over each time, just to be sure.
-
-	# Alternatively, if you're on windows, comment out this procedure and 
-	# copy the file manually
-	COMMAND cp include/FreeRTOSConfig.h FreeRTOS/include/
-	WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-)
-
-add_library(freertos_config INTERFACE)
-target_include_directories(freertos_config SYSTEM INTERFACE include)
-target_compile_definitions(freertos_config INTERFACE projCOVERAGE_TEST=0)
-set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/FreeRTOS)
-
-# add_subdirectory(FreeRTOS)  only gives an error, instead we have it handled by:
-include(FreeRTOS_Kernel_import.cmake)
-
-#	
-
 include_directories(
 	${CMAKE_CURRENT_LIST_DIR}
 )
 
-add_subdirectory(pico-vfs)
-add_subdirectory(i2ckbd)
-add_subdirectory(lcdspi)
-add_subdirectory(director)
-# add_subdirectory(apps)
+# I see no point in having these libraries twice in my file structure
+add_subdirectory(AppShell/pico-vfs)
+add_subdirectory(AppShell/i2ckbd)
+add_subdirectory(AppShell/lcdspi)
 
 add_executable(LUOS main.c)
 
+add_compile_options(-Wall
+	-Wno-format     
+		# int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
+	-Wno-unused-function
+		# we have some from the docs that aren't called
+	-Wno-maybe-uninitialized
+	-Os)
 
 target_link_libraries(LUOS
 	pico_stdlib
+	pico_bootsel_via_double_reset
 	hardware_flash
-	
-	hardware_timer
-	pico_unique_id
-	FreeRTOS-Kernel
-	FreeRTOS-Kernel-Heap4
-	
-	hardware_irq
-	hardware_adc
-	hardware_pwm
-	hardware_i2c
-	hardware_spi
 	hardware_dma
-	hardware_exception
-	hardware_pio
-	hardware_gpio
-	pico_multicore
+	hardware_uart
+	hardware_watchdog
+	hardware_pwm
 
+	i2ckbd
+	lcdspi
+	
 	blockdevice_sd
 	filesystem_fat	
 	filesystem_vfs
 	
-	i2ckbd
-	lcdspi
-	director
-	# manager
 )
 
 pico_enable_stdio_usb(LUOS 0)
-pico_enable_stdio_uart(LUOS 1)
+pico_enable_stdio_uart(LUOS 1)	
 
 pico_add_extra_outputs(LUOS)
 
 # pico_enable_filesystem(${CMAKE_PROJECT_NAME})
+
+# This function sets the custom linker script for SD card applications
+# The memmap_sdcard_app.ld script configures the application to start at
+# FLASH origin = 0x10000000 + 256k, which aligns with the SD_BOOT_FLASH_OFFSET
+# defined in main.c (256 * 1024). This ensures the bootloader (first 256KB)
+# is preserved when flashing the application.
+function(enable_sdcard_app target)
+  #pico_set_linker_script(${target} ${CMAKE_SOURCE_DIR}/memmap_sdcard_app.ld)
+  if(${PICO_PLATFORM} STREQUAL "rp2040")
+    pico_set_linker_script(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/memmap_default_rp2040.ld)
+  elseif(${PICO_PLATFORM} MATCHES "rp2350")
+    pico_set_linker_script(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/memmap_default_rp2350.ld)
+  endif()
+endfunction()
