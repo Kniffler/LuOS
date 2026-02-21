@@ -4,51 +4,31 @@ Loser µ-controller Operating System
 A neat little contraption of my own design.
 
 Contents:
-- [The Directive Terminal](#the-directive-terminal)
+- [The Bootloader](#bootloader)
+- [The settings file structure](#the-settings-file-structure)
 - [Build guide](#build-guide)
 	- [Getting and building the project](#getting-and-building-the-project)
 - [Changes and Libraries](#changes-and-libraries)
-- [Credits](#credits)
+- [TODO](#todo)
 
+# The Bootloader
+Upon launching the picocalc the bootloader will be the first thing you interface with, every time. Much like the picocalc comes out of the box. However this bootloader also comes equipped with a custom font and interface (more on that later) as well as a settings menu. This settings menu is/will be able to access a configuration file structure on the SD card such that other apps may access it.
 
-# The Directive Terminal
-In the top 2 rows of the screen, there will always be the directive terminal in view. Any and all system features have to be accessed using this feature.
-While there are currently only 2 commands (.clear and .test), more will be added with the extension of the system.
-
-There are 3 types of inputs the directive terminal accepts:
-- App launch operations
-  - Which are prepended with a comma (,)
-- System directives
-  - Which are prepended with a full-stop (.)
-- App referals
-  - Which can start with any character except the aforementioned ones.
-
-### App launch operations
-These are prepended with a comma (,) and serve no purpose other than launching a respective app. Here is an example for the launching of iowiz (which is an app that will be released in an upcoming commit):
-`>,iowiz`
-> [!NOTE]
-> The '>' is just an indicative character to show where the current command line is. It exists only for aesthetic reasons.
-
-### System directives
-Prepended with a comma (,) these are used to control the pico on the admin level (hah! as if I had the patience to invent a user space xD)
-
-There are only 2 of these at the present moment, however a general `.help` directive will be released soon, which will include a detailed list of commands and apps as well as general functionality of the system.
-> [!NOTE]
-> When this directive will be available, it is reasonable to assume that it is not always up to date as I may forget to do so on occasion.
-
-### App referals
-These, while having a confusing name, serve quite a fundamental function for apps. Simply put, whenever an app is open but is not in focus - that is to say all keyboard input goes to the directive terminal - then the directive will go directly to a function in the app whenever enter is pressed. This only works if the input is not prepended with a comma (,) or full-stop (.).
+# The settings file structure
+The menu of the bootloader is split up into 2, using the `splitter.h` interface, and as such cannot go deeper than 1 folder into the file-system of the SD card. This behaviour is intentional, as it allows for a bit of organization while also keeping the ability to hide files from the user - such as the setting files.
 
 # Build guide
-This build guide assumes you are operating on the linux operating system where it is much easier to install the required tools and other project dependencies. 
+This build guide assumes you are using the linux operating system where it is much easier to install the required tools and other project dependencies. 
 
-Please consult the internet for instructions on how to get the following requirements when compiling this project:
+Please consult the internet for instructions on how to get the following depedencies when compiling this project:
 - The [pico sdk](https://github.com/raspberrypi/pico-sdk) for hardware support
 - [CMake](https://cmake.org/download/) to guide compiling
 - [git](https://github.com/git-guides) for ease of installing
 
 > [!WARNING]
-> The links provided above do not cover everything that needs to be done in order to get this project working on windows. Manual intervention may be required
+> The links provided above do not cover everything that needs to be done in order to get this project working on windows. Manual intervention may be required.
+
+A text editor of your choice also doesn't hurt.
 
 ## Getting and building the project
 Assuming you met the dependencies earlier, you can now clone this repository locally using
@@ -66,7 +46,7 @@ Here are the commands for each:
 
 pico h:
 ```
-cmake -B build -DPICO_BOARD=pico
+cmake -B build
 cd build
 make
 ```
@@ -89,19 +69,19 @@ And there you go! A finished uf2 file for your pico, ready to be flashed!
 
 # Changes and libraries
 
-The submodules are utilized almost exactly as they are in the [official PicoCalc repository](https://github.com/clockworkpi/PicoCalc) meaning the pin-layout for all peripheral functionality (SD card, LCD screen, keyboard input...) is identical - due to hardware limitations. This also means any and all hardware-specific procedures have not been changed from the source code of the original repository, as that may compromise functionality.
+In terms of libraries and resources of others, I have:
+- Included the `lcdspi` and `i2ckbd` folders/libraries from the [official PicoCalc repository](https://github.com/clockworkpi/PicoCalc) keeping [uthash](https://github.com/troydhanson/uthash) as a submodule.
+- Added the [pico-vfs] (https://github.com/oyama/pico-vfs) repository as a submodule.
+- Used [Picocalc_SD_Boot](https://github.com/adwuard/Picocalc_SD_Boot) for most (well, all) of the booloader code.
+
+There is also [this article](https://github.com/adwuard/Picocalc_SD_Boot) which is linked in the Picocalc_SD_Boot repository source code. It goes into great detail about the boot routine of the pico and paints a great picture of how the bootloader code works. I highly recommend checking it out
+
 
 However, `lcdpsi` has been heavily modified to work with so called regions. Every app now needs to define a region of the screen via the `lcd_region_create` function. This has also made the library considerably harder to read. In the future, comments will be added and the code will be revised in order to combat this issue.
 
 Further explanations for regions may or may not be added to the README and a wiki (if I ever get around to making a wiki that is)
 
-# Credits
-In terms of libraries and resources of others, I have in included the [FreeRTOS submodule from raspberrypi](https://github.com/raspberrypi/FreeRTOS-Kernel) in order to get [FreeRTOS](https://github.com/FreeRTOS/FreeRTOS), and the `lcdspi` and `i2ckbd` folders/libraries from the [official PicoCalc repository](https://github.com/clockworkpi/PicoCalc).
-
-There is also [this repository](https://github.com/Wilkua/pi-pico-freertos-starter) by the user Wilkua, which I have used as a basis for actually getting FreeRTOS to run. The config file for FreeRTOS was also copied from this repo. Please check it out if you'd like to make a project like this on your own.
 
 # TODO
-## Apps (in progress)
-While the basic structure still needs work, the recent region update to the lcdspi library will make the programming of apps easier, knowing draw calls will not interfere with each other... okay that is more of a lie, the draw calls may still interfere with each other when different FreeRTOS tasks are calling on the lcdspi library - which is a problem that currently does not need solving but I should definitely not ignore it.
+## Finish the splitter.h library
 
-Further additions have to be made for the structure of app development, that being said progress has been going well.
