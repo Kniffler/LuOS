@@ -1,5 +1,6 @@
 #ifndef LCDSPI_H
 #define LCDSPI_H
+
 #include "pico/multicore.h"
 #include "uthash/include/uthash.h"
 // #include "uthash.h"
@@ -21,9 +22,6 @@
 #define LCD_WIDTH 320
 #define LCD_HEIGHT 320
 #endif
-
-#define FONT_WIDTH 0x08
-#define FONT_HEIGHT 0x0C
 
 #define PIXFMT_BGR 1
 
@@ -120,9 +118,13 @@ struct region
 	int start_x, start_y;	// Top left
 	int end_x, end_y;			// Bottom right
 	
-	int current_x, current_y;	// Offset from start where we are printing
+	int current_x, current_y;	// Offset from start = where we are printing
 	uint8_t is_printing_downward;
 	scrl_dir_t scroll_dir;
+	
+	unsigned char *font;
+	uint_t fcolour;
+	uint_t bcolour;
 };
 
 
@@ -151,18 +153,24 @@ extern void lcd_print_string(int rID, char* s);
 //	Customs
 extern void lcd_reset_coords(int rID);
 extern void lcd_region_clear(int rID);
-extern int lcd_region_create(int start_x, int start_y, int end_x, int end_y, uint8_t print_downwards, scrl_dir_t dir);
-extern void lcd_region_edit(int rID, int start_x, int start_y, int end_x, int end_y, uint8_t print_downwards, scrl_dir_t dir);
+
+
+extern int lcd_region_create(int start_x, int start_y, int end_x, int end_y);
+
+extern int lcd_region_set_positions(int rID, int start_x, int start_y, int end_x, int end_y);
+extern void lcd_region_set_asthetics(int rID, uint_t fc, uint_t bc, 
+	uint8_t print_downwards, scrl_dir_t dir, unsigned char *font_to_use);
+	
+extern void lcd_region_set_current(int rID, int x, int y);
+
+
 extern void lcd_region_delete(int rID);
 
-extern int lcd_get_current_x();
-extern int lcd_get_current_y();
-extern void lcd_set_coords(int rID, int x, int y);
+extern int lcd_get_current_x(int rID);
+extern int lcd_get_current_y(int rID);
 
-extern void lcd_set_colours(uint_t fc, uint_t bc);
 
 extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
-
 
 extern void lcd_spi_init();
 extern void lcd_init();
@@ -171,4 +179,4 @@ extern void reset_controller(void);
 extern void pin_set_bit(int pin, uint_t offset);
 
 
-#endif
+#endif // LCDSPI_H

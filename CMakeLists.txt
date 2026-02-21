@@ -17,6 +17,7 @@ include_directories(
 add_subdirectory(AppShell/pico-vfs)
 add_subdirectory(AppShell/i2ckbd)
 add_subdirectory(AppShell/lcdspi)
+add_subdirectory(AppShell/splitter)
 
 add_executable(LUOS main.c)
 
@@ -39,6 +40,7 @@ target_link_libraries(LUOS
 
 	i2ckbd
 	lcdspi
+	splitter
 	
 	blockdevice_sd
 	filesystem_fat	

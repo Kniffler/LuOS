@@ -1,4 +1,4 @@
-[submodule "pico-vfs"]
+[submodule "AppShell/pico-vfs"]
 	path = pico-vfs
 	url = https://github.com/oyama/pico-vfs
 [submodule "AppShell/lcdspi/uthash"]

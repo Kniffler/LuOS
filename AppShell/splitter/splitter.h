@@ -5,6 +5,6 @@
 #include "i2ckbd.h"
 #include "lcdspi.h"
 
-extern void splitter_init(int rID);
+extern void splitter_init();
 
-#endif//  __LUOS_SPLITTER__
+#endif // __LUOS_SPLITTER__

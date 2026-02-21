@@ -10,14 +10,16 @@
 #include "lcdspi.h"
 #include "i2ckbd.h"
 #include "pico/multicore.h"
-////////////////////**************************************fonts
-
 #include "fonts/font1.h"
-unsigned char *MainFont = (unsigned char *) font1;
 
-static int gui_fcolour;
-static int gui_bcolour;
+static uint_t gui_bcolour_default = BLACK;
+static uint_t gui_fcolour_default = ORANGE;
+
 static bool gui_cSwap;	//	Colour swap
+
+// I'm aware I am going to hurt readability here very soon. Sorry for breaking macro conventions.
+
+
 //static int current_x = 0, current_y = 0; // the current default position for the next char to be written
 #define CURRENT_X (regions[rID].start_x + regions[rID].current_x)
 #define CURRENT_Y (regions[rID].start_y + regions[rID].current_y)
@@ -28,21 +30,20 @@ static bool gui_cSwap;	//	Colour swap
 #define EX regions[rID].end_x
 #define EY regions[rID].end_y
 
-static short gui_font_width, gui_font_height;
-static short hres = 0;
-static short vres = 0;
-static char s_height;
-static char s_width;
 int lcd_char_pos = 0;
 unsigned char lcd_buffer[320 * 3] = {0};// 1440 = 480*3, 320*3 = 960
 
-#define REGION_MAX ((LCD_WIDTH/FONT_WIDTH)/2)*((LCD_HEIGHT/FONT_HEIGHT)/2)
+// Maximum possible amount of regions - these bad boys take up quite a bit of memory
+#define REGION_MAX 4
 
 static struct region regions[REGION_MAX];
 static int region_add_index = 0;
 
 static int spots_to_fill[REGION_MAX];
 static int spot_add_index = 0;
+
+static short hres = LCD_WIDTH;
+static short vres = LCD_HEIGHT;
 
 
 void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len) {
@@ -68,14 +69,6 @@ void __not_in_flash_func(spi_finish)(spi_inst_t *spi) {
 
 	// Don't leave overrun flag set
 	spi_get_hw(spi)->icr = SPI_SSPICR_RORIC_BITS;
-}
-
-void set_font() {
-	gui_font_width = MainFont[0];
-	gui_font_height = MainFont[1];
-
-	s_height = vres / gui_font_height;
-	s_width = hres / gui_font_width;
 }
 
 void define_region_spi(int xstart, int ystart, int xend, int yend, int rw) {
@@ -349,10 +342,10 @@ void lcd_print_char(int rID, int fc, int bc, char c, int orientation) {
 	int height, width;
 
 	// to get the +, - and = chars for font 6 we fudge them by scaling up font 1
-	fp = (unsigned char *) MainFont;
+	fp = regions[rID].font;
 
-	height = fp[1];
-	width = fp[0];
+	height = regions[rID].font[1];
+	width = regions[rID].font[0];
 	modx = mody = 0;
 	//printf("fp %d, c %d ,height %d width %d\n",fp,c, height,width);
 
@@ -379,14 +372,14 @@ void scroll_lcd_spi(int rID, int lines) {
 			read_buffer_spi(SX, i + lines, EX - 1, i + lines, scrollbuff);
 			draw_buffer_spi(SX, i, EX - 1, i, scrollbuff);
 		}
-		draw_rect_spi(SX, EY - lines, EX - 1, EY - 1, gui_bcolour); // erase the lines to be scrolled off
+		draw_rect_spi(SX, EY - lines, EX - 1, EY - 1, regions[rID].bcolour); // erase the lines to be scrolled off
 	} else {
 		lines = -lines;
 		for (int i = EY - 1; i >= lines; i--) {
 			read_buffer_spi(SX, i - lines, EX - 1, i - lines, scrollbuff);
 			draw_buffer_spi(SX, i, EX - 1, i, scrollbuff);
 		}
-		draw_rect_spi(SX, SY, EX - 1, lines - 1, gui_bcolour); // erase the lines introduced at the top
+		draw_rect_spi(SX, SY, EX - 1, lines - 1, regions[rID].bcolour); // erase the lines introduced at the top
 	}
 }
 
@@ -395,26 +388,26 @@ static void scroll_respectively(int rID)
 	switch(regions[rID].scroll_dir)
 	{
 		case RESET_TO_TOP: lcd_reset_coords(rID); break;
-		case RESET_TO_BOTTOM: lcd_set_coords(rID, 0, EY-gui_font_height); break;
+		case RESET_TO_BOTTOM: lcd_region_set_current(rID, 0, EY-regions[rID].font[1]); break;
 		case SHIFT_UPWARDS:
-			scroll_lcd_spi(rID, CURRENT_Y + gui_font_height - EY);
-			regions[rID].current_y -= (CURRENT_Y + gui_font_height - EY);
+			scroll_lcd_spi(rID, CURRENT_Y + regions[rID].font[1] - EY);
+			regions[rID].current_y -= (CURRENT_Y + regions[rID].font[1] - EY);
 			break;
 		case SHIFT_DOWNWARDS:
-			scroll_lcd_spi(rID, CURRENT_Y - gui_font_height + SY);
-			regions[rID].current_y += (CURRENT_Y - gui_font_height + SY);
+			scroll_lcd_spi(rID, CURRENT_Y - regions[rID].font[1] + SY);
+			regions[rID].current_y += (CURRENT_Y - regions[rID].font[1] + SY);
 			break;
 	}
 }
 
 void display_put_c(int rID, char c) {
 	// if it is printable and it is going to take us off the right hand end of the screen do a CRLF
-	if (c >= MainFont[2] && c < MainFont[2] + MainFont[3]) {
-		if (CURRENT_X + gui_font_width > EX) {
+	if (c >= regions[rID].font[2] && c < regions[rID].font[2] + regions[rID].font[3]) {
+		if (CURRENT_X + regions[rID].font[0] > EX) {
 			display_put_c(rID, '\r');
 			display_put_c(rID, '\n');
 		}
-		if ((CURRENT_Y + gui_font_height > EY && regions[rID].is_printing_downward==1) || (CURRENT_Y - gui_font_height < SY && (regions[rID].is_printing_downward==0)))
+		if ((CURRENT_Y + regions[rID].font[1] > EY && regions[rID].is_printing_downward==1) || (CURRENT_Y - regions[rID].font[1] < SY && (regions[rID].is_printing_downward==0)))
 		{
 			scroll_respectively(rID);
 		}
@@ -423,14 +416,14 @@ void display_put_c(int rID, char c) {
 	// handle the standard control chars
 	switch (c) {
 		case '\b':
-			regions[rID].current_x -= gui_font_width;
+			regions[rID].current_x -= regions[rID].font[0];
 			//if (CURRENT_X < 0) CURRENT_X = 0;
 			if (CURRENT_X < SX)	//Go to end of previous line
 			{
-				regions[rID].current_y -= gui_font_height;	//Go up one line
+				regions[rID].current_y -= regions[rID].font[1];	//Go up one line
 				
 				if(CURRENT_Y < SY) regions[rID].current_y = 0;
-				regions[rID].current_x = (((EX-SX)/FONT_WIDTH) - 1) * gui_font_width;  //go to last character
+				regions[rID].current_x = (((EX-SX)/regions[rID].font[0]) - 1) * regions[rID].font[0];  //go to last character
 			}			
 			return;
 		case '\r':
@@ -438,7 +431,7 @@ void display_put_c(int rID, char c) {
 			return;
 		case '\n':
 			regions[rID].current_x = 0;
-			regions[rID].current_y += (regions[rID].is_printing_downward==1) ? gui_font_height : -gui_font_height;
+			regions[rID].current_y += (regions[rID].is_printing_downward==1) ? regions[rID].font[1] : -regions[rID].font[1];
 
 			if (!(CURRENT_Y > EY || CURRENT_Y < SY)) { return; }
 			scroll_respectively(rID);
@@ -446,7 +439,7 @@ void display_put_c(int rID, char c) {
 		case '\t':
 			do {
 				display_put_c(rID, ' ');
-			} while ((regions[rID].current_x / gui_font_width) % 2);// 2 3 4 8
+			} while ((regions[rID].current_x / regions[rID].font[0]) % 2);// 2 3 4 8
 			return;
 		case '\017':
 				gui_cSwap = true;
@@ -457,9 +450,9 @@ void display_put_c(int rID, char c) {
 	}
 	if(gui_cSwap)
 	{
-		lcd_print_char(rID, gui_bcolour, gui_fcolour, c, ORIENT_NORMAL);// print it
+		lcd_print_char(rID, regions[rID].bcolour, regions[rID].fcolour, c, ORIENT_NORMAL);// print it
 	}else {
-		lcd_print_char(rID, gui_fcolour, gui_bcolour, c, ORIENT_NORMAL);// print it
+		lcd_print_char(rID, regions[rID].fcolour, regions[rID].bcolour, c, ORIENT_NORMAL);// print it
 	}
 }
 
@@ -488,39 +481,12 @@ void lcd_reset_coords(int rID) {
 
 ///////=----------------------------------------===//////
 void lcd_clear() {
-	draw_rect_spi(0, 0, hres - 1, vres - 1, gui_bcolour);
+	draw_rect_spi(0, 0, hres - 1, vres - 1, gui_bcolour_default);
 }
 
 //	My custom functions
 
-void lcd_region_clear(int rID) {
-	draw_rect_spi(SX, SY, EX - 1, EY - 1, gui_bcolour);
-}
-void lcd_set_colours(uint_t fc, uint_t bc) {
-	gui_fcolour = fc;
-	gui_bcolour = bc;
-}
-int lcd_get_current_x(int rID) { return regions[rID].current_x; }
-int lcd_get_current_y(int rID) { return regions[rID].current_y; }
-
-void lcd_set_coords(int rID, int x, int y)
-{
-	if(rID < 0 || rID >= REGION_MAX) { return; }
-	regions[rID].current_x = x;
-	regions[rID].current_y = y;
-}
-
-void lcd_region_edit(int rID, int start_x, int start_y, int end_x, int end_y, uint8_t print_downwards, scrl_dir_t dir)
-{
-	if(rID < 0 || rID >= REGION_MAX) { return; }
-	SX = start_x;
-	SY = start_y;
-	EX = end_x;
-	EY = end_y;
-	regions[rID].is_printing_downward = print_downwards;
-	regions[rID].scroll_dir = dir;
-}
-int lcd_region_create(int start_x, int start_y, int end_x, int end_y, uint8_t print_downwards, scrl_dir_t dir)
+int lcd_region_create(int start_x, int start_y, int end_x, int end_y)
 {
 	// Corner order orientation
 	if(start_x>=end_x) { return -1; }
@@ -550,9 +516,12 @@ int lcd_region_create(int start_x, int start_y, int end_x, int end_y, uint8_t pr
 	temp.end_x = end_x;
 	temp.end_y = end_y;
 	temp.current_x = 0;
-	temp.current_y = (print_downwards) ? 0 : end_y-gui_font_height;
-	temp.is_printing_downward = print_downwards;
-	temp.scroll_dir = dir;
+	temp.current_y = 0;
+	temp.is_printing_downward = 1;
+	temp.scroll_dir = SHIFT_DOWNWARDS;
+	temp.font = (unsigned char *)font1_data;
+	temp.bcolour = gui_bcolour_default;
+	temp.fcolour = gui_fcolour_default;
 	
 	if(spot_add_index>0)
 	{
@@ -562,13 +531,59 @@ int lcd_region_create(int start_x, int start_y, int end_x, int end_y, uint8_t pr
 	regions[region_add_index++] = temp;
 	return region_add_index-1;
 }
-
 void lcd_region_delete(int rID)
 {
 	if(rID < 0 || rID >= REGION_MAX) { return; }
 	spots_to_fill[spot_add_index++] = rID;
 	lcd_region_clear(rID);
 	// Note that this function meerely allows for the region to reused and clears it
+}
+
+// Further region functions
+
+int lcd_region_set_positions(int rID, int start_x, int start_y, int end_x, int end_y)
+{
+	if(rID < 0 || rID >= REGION_MAX) { return 0; }
+	for(int i = 0; i < region_add_index; i++)
+	{
+		const uint_t x1 = regions[i].start_x;
+		const uint_t y1 = regions[i].start_y;
+		const uint_t x2 = regions[i].end_x;
+		const uint_t y2 = regions[i].end_y;
+		
+		if(start_x > x2 || x1 > end_x || end_y > y1 || y2 > start_y)
+			{ continue; }
+		return -7;
+	}
+	SX = start_x;
+	SY = start_y;
+	EX = end_x;
+	EY = end_y;
+	return 0;
+}
+void lcd_region_set_asthetics(int rID, uint_t fc, uint_t bc, uint8_t print_downwards, scrl_dir_t dir, unsigned char *font_to_use)
+{
+	if(rID < 0 || rID >= REGION_MAX) { return; }
+	regions[rID].fcolour = fc;
+	regions[rID].bcolour = bc;
+	regions[rID].is_printing_downward = print_downwards;
+	regions[rID].scroll_dir = dir;
+	regions[rID].font = (unsigned char *)font_to_use;
+}
+
+void lcd_region_clear(int rID) {
+	draw_rect_spi(SX, SY, EX - 1, EY - 1, regions[rID].bcolour);
+}
+
+
+int lcd_get_current_x(int rID) { return regions[rID].current_x; }
+int lcd_get_current_y(int rID) { return regions[rID].current_y; }
+
+void lcd_region_set_current(int rID, int x, int y)
+{
+	if(rID < 0 || rID >= REGION_MAX) { return; }
+	regions[rID].current_x = x;
+	regions[rID].current_y = y;
 }
 
 
@@ -841,7 +856,4 @@ void lcd_spi_init() {
 void lcd_init() {
 	lcd_spi_init();
 	pico_lcd_init();
-
-	set_font();
-	lcd_set_colours(GREEN, BLACK);
 }

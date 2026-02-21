@@ -5,6 +5,7 @@
 #include "hardware/clocks.h"
 #include "i2ckbd.h"
 #include "lcdspi.h"
+#include "splitter.h"
 #include <hardware/flash.h>
 #include <hardware/watchdog.h>
 #include "config.h"
@@ -235,4 +236,5 @@ int main()
 
 	lcd_init();
 	lcd_clear();
+	splitter_init();
 }
