@@ -6,9 +6,10 @@
 // #include "uthash.h"
 #include <hardware/spi.h>
 
-//#define LCD_SPI_SPEED   6000000
-#define LCD_SPI_SPEED   25000000
-//#define LCD_SPI_SPEED 50000000
+// #define LCD_SPI_SPEED	6000000
+// #define LCD_SPI_SPEED	25000000
+#define LCD_SPI_SPEED		20000000
+// #define LCD_SPI_SPEED	50000000
 
 #define Pico_LCD_SCK 10 //
 #define Pico_LCD_TX  11 // MOSI
@@ -115,18 +116,17 @@ typedef enum scroll_direction
 
 struct region
 {
-	int start_x, start_y;	// Top left
-	int end_x, end_y;			// Bottom right
+	uint16_t start_x, start_y;	// Top left
+	uint16_t end_x, end_y;			// Bottom right
 	
-	int current_x, current_y;	// Offset from start = where we are printing
-	uint8_t is_printing_downward;
+	uint16_t current_x, current_y;	// = offset from start = where we are printing
+	bool is_printing_downward;
 	scrl_dir_t scroll_dir;
 	
 	unsigned char *font;
 	uint_t fcolour;
 	uint_t bcolour;
 };
-
 
 
 extern void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len);
@@ -159,7 +159,7 @@ extern int lcd_region_create(int start_x, int start_y, int end_x, int end_y);
 
 extern int lcd_region_set_positions(int rID, int start_x, int start_y, int end_x, int end_y);
 extern void lcd_region_set_asthetics(int rID, uint_t fc, uint_t bc, 
-	uint8_t print_downwards, scrl_dir_t dir, unsigned char *font_to_use);
+	bool print_downwards, scrl_dir_t dir, unsigned char *font_to_use);
 	
 extern void lcd_region_set_current(int rID, int x, int y);
 
@@ -169,6 +169,10 @@ extern void lcd_region_delete(int rID);
 extern int lcd_get_current_x(int rID);
 extern int lcd_get_current_y(int rID);
 
+extern uint16_t lcd_get_region_width(int rID);
+extern uint16_t lcd_get_region_height(int rID);
+
+// Back
 
 extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
 

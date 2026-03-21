@@ -13,7 +13,7 @@ include_directories(
 	${CMAKE_CURRENT_LIST_DIR}
 )
 
-# I see no point in having these libraries twice in my file structure
+# I see no point in having these libraries twice in my file structure, thus they are all in AppShell
 add_subdirectory(AppShell/pico-vfs)
 add_subdirectory(AppShell/i2ckbd)
 add_subdirectory(AppShell/lcdspi)
@@ -37,6 +37,7 @@ target_link_libraries(LUOS
 	hardware_uart
 	hardware_watchdog
 	hardware_pwm
+	pico_multicore
 
 	i2ckbd
 	lcdspi
@@ -45,7 +46,6 @@ target_link_libraries(LUOS
 	blockdevice_sd
 	filesystem_fat	
 	filesystem_vfs
-	
 )
 
 pico_enable_stdio_usb(LUOS 0)

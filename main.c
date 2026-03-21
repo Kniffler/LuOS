@@ -1,23 +1,25 @@
+#include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
-#include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "hardware/clocks.h"
-#include "i2ckbd.h"
 #include "lcdspi.h"
 #include "splitter.h"
 #include <hardware/flash.h>
 #include <hardware/watchdog.h>
 #include "config.h"
 
+#include <pico/platform/common.h>
+
 #include "blockdevice/sd.h"
 #include "filesystem/fat.h"
 #include "filesystem/vfs.h"
 /*
-#include "text_directory_ui.h"
-#include "key_event.h"
-*/
+ * #include "text_directory_ui.h"
+ * #include "key_event.h"
+ */
 // Vector and RAM offset
+
 #if PICO_RP2040
 #define VTOR_OFFSET M0PLUS_VTOR_OFFSET
 #define MAX_RAM 0x20040000
@@ -35,23 +37,24 @@ bool sd_card_inserted(void)
 bool fs_init(void)
 {
 	blockdevice_t *sd = blockdevice_sd_create(spi0,
-		SD_MOSI_PIN,
-		SD_MISO_PIN,
-		SD_SCLK_PIN,
-		SD_CS_PIN,
-		125000000 / 2 / 4, // 15.6MHz
-	true);
-	
+											  SD_MOSI_PIN,
+										   SD_MISO_PIN,
+										   SD_SCLK_PIN,
+										   SD_CS_PIN,
+										   125000000 / 2 / 4, // 15.6MHz
+										   true);
+
 	filesystem_t *fat = filesystem_fat_create();
 
 	int err = fs_mount("/sd", fat, sd);
 	if (err != -1) { return true; }
-	
+
 	err = fs_format(fat, sd);
 	if (err == -1) { return false; }
-	
+
 	err = fs_mount("/sd", fat, sd);
 	if (err == -1) { return false; }
+	return true;
 }
 
 static bool __not_in_flash_func(is_same_as_existing_program)(FILE *fp)
@@ -64,7 +67,7 @@ static bool __not_in_flash_func(is_same_as_existing_program)(FILE *fp)
 		uint8_t *flash = (uint8_t *)(XIP_BASE + SD_BOOT_FLASH_OFFSET + program_size);
 		if (memcmp(buffer, flash, len) != 0)
 		{ return false; }
-		
+
 		program_size += len;
 	}
 	return true;
@@ -90,13 +93,14 @@ static bool __not_in_flash_func(load_program)(const char *filename)
 	if (file_size > MAX_APP_SIZE) { fclose(fp); return false; }
 	if (fseek(fp, 0, SEEK_SET) == -1) { fclose(fp); return false; }
 
-	
+
 	size_t program_size = 0;
-	
-	uint8_t first_page = 0;
+
+	uint8_t first_page[FLASH_SECTOR_SIZE] = {0};
 	uint8_t buffer[FLASH_SECTOR_SIZE] = {0};
-	
+
 	size_t len = 0;
+	size_t flen = 0;
 
 	// Erase and program flash in FLASH_SECTOR_SIZE chunks
 	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0)
@@ -107,30 +111,30 @@ static bool __not_in_flash_func(load_program)(const char *filename)
 			fclose(fp);
 			return false;
 		}
-		
+
 		uint32_t ints = save_and_disable_interrupts();
 		flash_range_erase(SD_BOOT_FLASH_OFFSET + program_size, FLASH_SECTOR_SIZE);
 
 		/* Don't program the first page, and save it.
 			This way we prevent launching apps that have not yet been fully loaded into flash.
-		*/
+		 */
 		if(program_size != 0)
 		{
 			flash_range_program(SD_BOOT_FLASH_OFFSET + program_size, buffer, len);
 		}else{
-			flash_range_program(SD_BOOT_FLASH_OFFSET + program_size, 0, len);	// In case there is a valid vector table stored
-			first_page = *buffer;
+			*first_page = *buffer;
+			flen = len;
 		}
 
 		restore_interrupts(ints);
 
 		program_size += len;
 	}
-	
+
 	uint32_t ints = save_and_disable_interrupts();
-	flash_range_program(SD_BOOT_FLASH_OFFSET, &first_page, len);
+	flash_range_program(SD_BOOT_FLASH_OFFSET, first_page, flen);
 	restore_interrupts(ints);
-	
+
 	fclose(fp);
 	return true;
 }
@@ -236,5 +240,10 @@ int main()
 
 	lcd_init();
 	lcd_clear();
-	splitter_init();
+	int id = lcd_region_create(0, 0, LCD_WIDTH, LCD_HEIGHT);
+	uint32_t name_length = splitter_init(id);
+	uint16_t option_count = name_length&UINT16_MAX;
+	name_length >>= 16;
+
+	for(;;) { tight_loop_contents(); }
 }

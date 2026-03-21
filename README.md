@@ -15,7 +15,7 @@ Contents:
 Upon launching the picocalc the bootloader will be the first thing you interface with, every time. Much like the picocalc comes out of the box. However this bootloader also comes equipped with a custom font and interface (more on that later) as well as a settings menu. This settings menu is/will be able to access a configuration file structure on the SD card such that other apps may access it.
 
 # The settings file structure
-The menu of the bootloader is split up into 2, using the `splitter.h` interface, and as such cannot go deeper than 1 folder into the file-system of the SD card. This behaviour is intentional, as it allows for a bit of organization while also keeping the ability to hide files from the user - such as the setting files.
+The menu of the bootloader is split up into 2, using the `splitter.h` interface and as such cannot go deeper than 1 folder into the file-system of the SD card. This behaviour is intentional, as it allows for a bit of organization while also keeping the ability to hide files from the user - such as the setting files.
 
 # Build guide
 This build guide assumes you are using the linux operating system where it is much easier to install the required tools and other project dependencies. 
@@ -47,25 +47,24 @@ Here are the commands for each:
 pico h:
 ```
 cmake -B build
-cd build
-make
+make -C build
 ```
 
 pico w:
 ```
 cmake -B build -DPICO_BOARD=pico_w
-cd build
-make
+make -C build
 ```
 
 pico 2/2w:
 ```
 cmake -B build -DPICO_BOARD=pico2
-cd build
-make
+make -C build
 ```
+The resultant uf2 file can now be found under /path/of/repository/LuOS/build/LUOS.uf2
 
-And there you go! A finished uf2 file for your pico, ready to be flashed!
+> [!IMPORTANT]
+> The `build.sh` script is not to be used if you want to run this project as is. If you plan on modifying the source code then this script is at your disposal for quick debugging however, you will need to change the DEVICE_MOUNTS_BY_NAME variable in the script if your pico mounts under a different label.
 
 # Changes and libraries
 
@@ -74,10 +73,10 @@ In terms of libraries and resources of others, I have:
 - Added the [pico-vfs] (https://github.com/oyama/pico-vfs) repository as a submodule.
 - Used [Picocalc_SD_Boot](https://github.com/adwuard/Picocalc_SD_Boot) for most (well, all) of the booloader code.
 
-There is also [this article](https://github.com/adwuard/Picocalc_SD_Boot) which is linked in the Picocalc_SD_Boot repository source code. It goes into great detail about the boot routine of the pico and paints a great picture of how the bootloader code works. I highly recommend checking it out
+There is also [this article](https://github.com/adwuard/Picocalc_SD_Boot) which is linked in the Picocalc_SD_Boot repository source code. It goes into detail about the boot routine of the pico and paints a great picture of how the bootloader code works. I highly recommend checking it out.
 
 
-However, `lcdpsi` has been heavily modified to work with so called regions. Every app now needs to define a region of the screen via the `lcd_region_create` function. This has also made the library considerably harder to read. In the future, comments will be added and the code will be revised in order to combat this issue.
+`lcdpsi` has been heavily modified to work with so called regions. Every app now needs to define one or more regions of the screen via the `lcd_region_create` function. This has also made the library considerably harder to read. In the future, comments will be added and the code will be revised in order to combat this issue.
 
 Further explanations for regions may or may not be added to the README and a wiki (if I ever get around to making a wiki that is)
 

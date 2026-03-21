@@ -3,17 +3,18 @@
 #include <stdarg.h>
 
 #include <hardware/spi.h>
-#include "hardware/timer.h"
 #include <ctype.h>
 #include <stdio.h>
 
 #include "lcdspi.h"
 #include "i2ckbd.h"
 #include "pico/multicore.h"
+
+// #include "fonts/LuOS_System_Font.h"
 #include "fonts/font1.h"
 
-static uint_t gui_bcolour_default = BLACK;
-static uint_t gui_fcolour_default = ORANGE;
+static uint_t gui_bcolour_default = MAGENTA;
+static uint_t gui_fcolour_default = BLACK;
 
 static bool gui_cSwap;	//	Colour swap
 
@@ -44,7 +45,6 @@ static int spot_add_index = 0;
 
 static short hres = LCD_WIDTH;
 static short vres = LCD_HEIGHT;
-
 
 void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len) {
 	// Write to TX FIFO whilst ignoring RX, then clean up afterward. When RX
@@ -476,7 +476,7 @@ void lcd_print_string(int rID, char *s) {
 
 void lcd_reset_coords(int rID) {
 	regions[rID].current_x = SX;
-	regions[rID].current_y = SY;
+	regions[rID].current_y = (regions[rID].is_printing_downward) ? SY : EY-regions[rID].font[1];
 }
 
 ///////=----------------------------------------===//////
@@ -525,7 +525,7 @@ int lcd_region_create(int start_x, int start_y, int end_x, int end_y)
 	
 	if(spot_add_index>0)
 	{
-		regions[spots_to_fill[--spot_add_index]] = temp;	
+		regions[spots_to_fill[--spot_add_index]] = temp;
 		return spots_to_fill[spot_add_index+1];
 	}
 	regions[region_add_index++] = temp;
@@ -561,7 +561,7 @@ int lcd_region_set_positions(int rID, int start_x, int start_y, int end_x, int e
 	EY = end_y;
 	return 0;
 }
-void lcd_region_set_asthetics(int rID, uint_t fc, uint_t bc, uint8_t print_downwards, scrl_dir_t dir, unsigned char *font_to_use)
+void lcd_region_set_asthetics(int rID, uint_t fc, uint_t bc, bool print_downwards, scrl_dir_t dir, unsigned char *font_to_use)
 {
 	if(rID < 0 || rID >= REGION_MAX) { return; }
 	regions[rID].fcolour = fc;
@@ -569,6 +569,8 @@ void lcd_region_set_asthetics(int rID, uint_t fc, uint_t bc, uint8_t print_downw
 	regions[rID].is_printing_downward = print_downwards;
 	regions[rID].scroll_dir = dir;
 	regions[rID].font = (unsigned char *)font_to_use;
+
+	lcd_reset_coords(rID);
 }
 
 void lcd_region_clear(int rID) {
@@ -578,10 +580,14 @@ void lcd_region_clear(int rID) {
 
 int lcd_get_current_x(int rID) { return regions[rID].current_x; }
 int lcd_get_current_y(int rID) { return regions[rID].current_y; }
+uint16_t lcd_get_region_width(int rID) { return EX-SX; }
+uint16_t lcd_get_region_height(int rID) { return EY-SY; }
+
 
 void lcd_region_set_current(int rID, int x, int y)
 {
 	if(rID < 0 || rID >= REGION_MAX) { return; }
+	if(SX+x>EX || SX+x<SX || SY+y>EY || SY+y<SY ) { return; }
 	regions[rID].current_x = x;
 	regions[rID].current_y = y;
 }
@@ -851,7 +857,6 @@ void lcd_spi_init() {
 	gpio_put(Pico_LCD_CS, 1);
 	gpio_put(Pico_LCD_RST, 1);
 }
-
 
 void lcd_init() {
 	lcd_spi_init();
