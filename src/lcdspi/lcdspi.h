@@ -1,10 +1,9 @@
 #ifndef LCDSPI_H
 #define LCDSPI_H
 
-#include "pico/multicore.h"
-#include "uthash/include/uthash.h"
 // #include "uthash.h"
 #include <hardware/spi.h>
+#include <pico/stdlib.h>
 
 // #define LCD_SPI_SPEED	6000000
 // #define LCD_SPI_SPEED	25000000

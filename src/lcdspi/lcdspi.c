@@ -8,7 +8,6 @@
 
 #include "lcdspi.h"
 #include "i2ckbd.h"
-#include "pico/multicore.h"
 
 // #include "fonts/LuOS_System_Font.h"
 #include "fonts/font1.h"

@@ -6,9 +6,12 @@
 #include <pico/platform/common.h>
 #include <pico/multicore.h>
 #include <sys/unistd.h>
+#include <pico/malloc.h>
 
-static uint16_t max_entry_name_length = 0;
-static uint16_t max_entries_per_list = 0;
+#include <stdio.h>
+
+static uint8_t max_entry_name_length = 0;
+static uint8_t max_entries_per_list = 0;
 static uint16_t right_side_offset = 0;
 
 static uint8_t divider_width = 0;
@@ -23,7 +26,7 @@ static void core1_lcd_print_receiver(void)
 	// We, most literally, draw a line here. \xDB maps to character 219, which maps to a fully filled bitmap.
 	// The space then clears any overflow.
 	lcd_region_set_current(rID, right_side_offset-divider_width, 0);
-	for(int i = 0; i < max_entries_per_list-1; i++)
+	for(int i = 0; i < max_entries_per_list; i++)
 	{
 		lcd_region_set_current(rID, right_side_offset-divider_width, i*mainFont[1]);
 
@@ -45,7 +48,7 @@ static void core1_lcd_print_receiver(void)
 	}
 }
 
-uint32_t splitter_init(int rIDgiven)
+uint16_t splitter_init(int rIDgiven)
 {
 	if(lcd_get_region_height(rIDgiven)<mainFont[1]*2 || lcd_get_region_width(rIDgiven)<(mainFont[0]*2)+1)
 	{ return 0; }
@@ -64,16 +67,21 @@ uint32_t splitter_init(int rIDgiven)
 	// The -1 is such that we have a space at the bottom for a little bit of a status message
 
 	multicore_launch_core1(core1_lcd_print_receiver);
-	/* Any and all text displaying will be done on core1.
+	/* Any and all text displaying will be done on core 1.
 	 * This is done in order to have faster printing times and essentially just not block code execution - which
 	 * may slow us down in the long run if we are trying to do calculations in the meantime. So long story short,
 	 * this approach lets us use both cores in order to optimize speed and performance.
 	*/
 	inited = 1;
+	sleep_ms(200);
+	char s[256];
+	lcd_reset_coords(rIDgiven);
+	sprintf(s, "Size of a single struct here is: %d\n", sizeof(entry_t));
+	lcd_print_string(rID, s);
 	return (max_entry_name_length<<16)|max_entries_per_list;
 }
 
-void lcd_print_string_c1(int rID, char* str)
+void lcd_print_string_core1(int rID, char* str)
 {
 	if(!inited) { return; }
 
@@ -90,5 +98,4 @@ static void print_and_cut_entry_name(char entry[max_entry_name_length], bool isO
 
 void print_all_entries()
 {
-
 }

@@ -10,6 +10,8 @@
 #include "config.h"
 
 #include <pico/platform/common.h>
+#include <pico/stdlib.h>
+#include <hardware/sync.h>
 
 #include "blockdevice/sd.h"
 #include "filesystem/fat.h"
@@ -241,9 +243,9 @@ int main()
 	lcd_init();
 	lcd_clear();
 	int id = lcd_region_create(0, 0, LCD_WIDTH, LCD_HEIGHT);
-	uint32_t name_length = splitter_init(id);
-	uint16_t option_count = name_length&UINT16_MAX;
-	name_length >>= 16;
+	uint16_t name_length = splitter_init(id);
+	uint8_t option_count = name_length&UINT8_MAX;
+	name_length >>= 8;
 
 	for(;;) { tight_loop_contents(); }
 }
