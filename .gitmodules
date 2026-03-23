@@ -1,5 +1,5 @@
 [submodule "src/pico-vfs"]
-	path = pico-vfs
+	path = src/pico-vfs
 	url = https://github.com/oyama/pico-vfs
 [submodule "src/lcdspi/uthash"]
 	path = src/lcdspi/uthash
