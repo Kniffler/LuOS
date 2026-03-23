@@ -1,6 +1,6 @@
-[submodule "AppShell/pico-vfs"]
+[submodule "src/pico-vfs"]
 	path = pico-vfs
 	url = https://github.com/oyama/pico-vfs
-[submodule "AppShell/lcdspi/uthash"]
-	path = AppShell/lcdspi/uthash
+[submodule "src/lcdspi/uthash"]
+	path = src/lcdspi/uthash
 	url = https://github.com/troydhanson/uthash
