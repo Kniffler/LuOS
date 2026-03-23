@@ -14,10 +14,10 @@ include_directories(
 )
 
 # I see no point in having these libraries twice in my file structure, thus they are all in AppShell
-add_subdirectory(AppShell/pico-vfs)
-add_subdirectory(AppShell/i2ckbd)
-add_subdirectory(AppShell/lcdspi)
-add_subdirectory(AppShell/splitter)
+add_subdirectory(src/pico-vfs)
+add_subdirectory(src/i2ckbd)
+add_subdirectory(src/lcdspi)
+add_subdirectory(src/splitter)
 
 add_executable(LUOS main.c)
 
