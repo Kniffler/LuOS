@@ -3,4 +3,4 @@
 	url = https://github.com/troydhanson/uthash.git
 [submodule "src/pico-vfs"]
 	path = src/pico-vfs
-	url = https://github.com/oyama/pico-vfs
+	url = https://github.com/oyama/pico-vfs.git
