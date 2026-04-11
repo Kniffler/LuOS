@@ -13,7 +13,7 @@ include_directories(
 	${CMAKE_CURRENT_LIST_DIR}
 )
 
-# I see no point in having these libraries twice in my file structure, thus they are all in AppShell
+# I see no point in having these libraries twice in my file structure, thus they are all in src
 add_subdirectory(src/pico-vfs)
 add_subdirectory(src/i2ckbd)
 add_subdirectory(src/lcdspi)
