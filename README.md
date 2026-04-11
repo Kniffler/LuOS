@@ -72,7 +72,7 @@ The resultant uf2 file can now be found under /path/of/repository/LuOS/build/LUO
 
 In terms of libraries and resources of others, I have:
 - Included the `lcdspi` and `i2ckbd` folders/libraries from the [official PicoCalc repository](https://github.com/clockworkpi/PicoCalc) keeping [uthash](https://github.com/troydhanson/uthash) as a submodule.
-- Added the [pico-vfs] (https://github.com/oyama/pico-vfs) repository as a submodule.
+- Added the [pico-vfs](https://github.com/oyama/pico-vfs) repository as a submodule.
 - Used [Picocalc_SD_Boot](https://github.com/adwuard/Picocalc_SD_Boot) for most (well, all) of the booloader code.
 
 There is also [this article](https://github.com/adwuard/Picocalc_SD_Boot) which is linked in the Picocalc_SD_Boot repository source code. It goes into detail about the boot routine of the pico and paints a great picture of how the bootloader code works. I highly recommend checking it out.
