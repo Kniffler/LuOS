@@ -34,7 +34,7 @@ int lcd_char_pos = 0;
 unsigned char lcd_buffer[320 * 3] = {0};// 1440 = 480*3, 320*3 = 960
 
 // Maximum possible amount of regions - these bad boys take up quite a bit of memory
-#define REGION_MAX 4
+#define REGION_MAX 32
 
 static struct region regions[REGION_MAX];
 static int region_add_index = 0;

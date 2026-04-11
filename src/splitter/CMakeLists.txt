@@ -20,6 +20,7 @@ target_link_libraries(splitter INTERFACE
 	lcdspi
 	pico_multicore
 	pico_malloc
+	GSM
 )
 
 target_include_directories(splitter INTERFACE ${CMAKE_CURRENT_LIST_DIR})

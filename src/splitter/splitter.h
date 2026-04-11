@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+
 // #include "fonts/LuOS_System_Font.h"
 
 // #define MAX_OPTIONS_PER_LIST (LCD_HEIGHT/(LuOS_System_Font_data[1]))
@@ -16,37 +17,26 @@ typedef enum entry_type {
 	BRANCH,			// A folder-type option, encompasses multiple entries
 	LEAF,			// Purely decorative, no interaction possible
 	FUNCTIONABLE,	// Mapped to a function
-	SETTING_INT,	// Has integer value
-	SETTING_FLOAT,	// Has float value
-	SETTING_RANGE,	// A value inside a set range
-	SETTING_STRING,	// A string
-	SETTING_TOGGLE,	// A true or false setting
-	SETTING_LIST,	// A list of string-type options - useful for enums
+	SETTING,		// Can be set
 } entry_type_t;
 
-typedef struct entry_t
+typedef struct entry_struct_t
 {
-	entry_type_t type;
 	char* name;
-	bool selected;
+
+	entry_type_t type;
+	// bool exits;
 
 	// All possible contents
 	union {
-		struct entry_t* sub_entries;
+		void* value_p;
 		bool(*action)(void);
-
-		int32_t value_int32;
-		float value_float;
-		double value_double;
-		uint64_t range_32per;
-		// Since a union can only be one of the given types, we use the upper and lower half of a 64 bit number to define a maximum and a minimum, respectively.
-		char *value_string;
-		bool toggle_on;
-		char *name_list;
 	};
 } entry_t;
 
-extern uint16_t splitter_init(int rIDGiven);
-extern void lcd_print_string_core1(int rID, char* str);
+
+extern uint16_t splitter_init(int rIDGiven, int max_depth);
+extern void start_splitter(void);
+extern void set_status_message(char *to);
 
 #endif // __LUOS_SPLITTER__

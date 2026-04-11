@@ -171,7 +171,7 @@ extern int lcd_get_current_y(int rID);
 extern uint16_t lcd_get_region_width(int rID);
 extern uint16_t lcd_get_region_height(int rID);
 
-// Back
+// Normal stuff
 
 extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
 

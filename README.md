@@ -3,7 +3,9 @@ Loser µ-controller Operating System
 
 A neat little contraption of my own design.
 
-Contents:
+# TODO
+
+## Contents:
 - [The Bootloader](#bootloader)
 - [The settings file structure](#the-settings-file-structure)
 - [Build guide](#build-guide)
@@ -64,7 +66,7 @@ make -C build
 The resultant uf2 file can now be found under /path/of/repository/LuOS/build/LUOS.uf2
 
 > [!IMPORTANT]
-> The `build.sh` script is not to be used if you want to run this project as is. If you plan on modifying the source code then this script is at your disposal for quick debugging however, you will need to change the DEVICE_MOUNTS_BY_NAME variable in the script if your pico mounts under a different label.
+> The `build.sh` script is not to be used if you want to run this project as is. If you plan on modifying the source code then this script is at your disposal for quick debugging, however you will need to change the DEVICE_MOUNTS_BY_NAME variable in the script if your pico mounts under a different label.
 
 # Changes and libraries
 
@@ -79,8 +81,4 @@ There is also [this article](https://github.com/adwuard/Picocalc_SD_Boot) which 
 `lcdpsi` has been heavily modified to work with so called regions. Every app now needs to define one or more regions of the screen via the `lcd_region_create` function. This has also made the library considerably harder to read. In the future, comments will be added and the code will be revised in order to combat this issue.
 
 Further explanations for regions may or may not be added to the README and a wiki (if I ever get around to making a wiki that is)
-
-
-# TODO
-## Finish the splitter.h library
 

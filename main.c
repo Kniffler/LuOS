@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "hardware/gpio.h"
+#include "i2ckbd.h"
 #include "lcdspi.h"
 #include "splitter.h"
 #include <hardware/flash.h>
@@ -124,7 +125,7 @@ static bool __not_in_flash_func(load_program)(const char *filename)
 		{
 			flash_range_program(SD_BOOT_FLASH_OFFSET + program_size, buffer, len);
 		}else{
-			*first_page = *buffer;
+			for(int i = 0; i < FLASH_SECTOR_SIZE; i++) { first_page[i] = buffer[i]; }
 			flen = len;
 		}
 
@@ -213,18 +214,19 @@ void final_selection_callback(const char *path)
 {
 	// Trigger firmware loading with the selected path
 
-	char status_message[128];
 	const char *extension = ".bin";
 	size_t path_len = strlen(path);
 	size_t ext_len = strlen(extension);
 
 	if (path_len < ext_len || strcmp(path + path_len - ext_len, extension) != 0)
 	{
-		snprintf(status_message, sizeof(status_message), "Err: FILE is not a .bin file");
+		set_status_message("Error: Not a valid .bin file");
 		return;
 	}
 
-	snprintf(status_message, sizeof(status_message), "SEL: %s", path);
+	char msg[128];
+	snprintf(msg, sizeof(msg), "File: %s", path);
+	set_status_message(msg);
 
 	sleep_ms(200);
 
@@ -243,9 +245,10 @@ int main()
 	lcd_init();
 	lcd_clear();
 	int id = lcd_region_create(0, 0, LCD_WIDTH, LCD_HEIGHT);
-	uint16_t name_length = splitter_init(id);
+	uint16_t name_length = splitter_init(id, 1);
 	uint8_t option_count = name_length&UINT8_MAX;
 	name_length >>= 8;
+	start_splitter();
 
 	for(;;) { tight_loop_contents(); }
 }

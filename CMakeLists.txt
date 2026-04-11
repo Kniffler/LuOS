@@ -18,16 +18,20 @@ add_subdirectory(src/pico-vfs)
 add_subdirectory(src/i2ckbd)
 add_subdirectory(src/lcdspi)
 add_subdirectory(src/splitter)
+add_subdirectory(src/GSM)
 
 add_executable(LUOS main.c)
 
 add_compile_options(-Wall
-	-Wno-format     
+	# -Wno-format
 		# int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
-	-Wno-unused-function
+	# -Wno-unused-function
 		# we have some from the docs that aren't called
 	-Wno-maybe-uninitialized
-	-Os)
+	-Os
+)
+
+string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
 
 target_link_libraries(LUOS
 	pico_stdlib
@@ -42,14 +46,15 @@ target_link_libraries(LUOS
 	i2ckbd
 	lcdspi
 	splitter
-	
+	GSM
+
 	blockdevice_sd
-	filesystem_fat	
+	filesystem_fat
 	filesystem_vfs
 )
 
 pico_enable_stdio_usb(LUOS 0)
-pico_enable_stdio_uart(LUOS 1)	
+pico_enable_stdio_uart(LUOS 0)
 
 pico_add_extra_outputs(LUOS)
 

@@ -6,12 +6,11 @@ make -C build
 OUTPUT_FILE="build/LUOS.uf2"
 DEVICE_MOUNTS_BY_NAME="RPI-RP2"
 
+DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')
+
 while true; do
-	DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')
-
 	if [ -n "$DEVICE" ]; then
-
-#		 pkexec mount "$DEVICE" "$MOUNT_POINT"
+#		pkexec mount "$DEVICE" "$MOUNT_POINT"
 		udisksctl mount -b "$DEVICE"
 		MOUNT_POINT=$(mount | grep "$DEVICE" | awk '{print $3}')
 
@@ -20,8 +19,17 @@ while true; do
 
 			sync
 			umount "$MOUNT_POINT"
-			exit 0
+			sleep 1
+			break
 		fi
 	fi
 	sleep 1
+	DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')
 done
+
+# https://www.pragmaticlinux.com/2023/01/how-to-list-all-serial-ports-on-linux/
+# PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
+# while [ "$PORT" ]; do
+# 	PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
+# done
+# konsole --hold -e screen "$PORT"

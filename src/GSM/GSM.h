@@ -106,7 +106,7 @@ typedef struct setting_struct {
 // The size of this struct is 48 Bytes (or so says my editor), so the memory
 // it takes up is actually rather negligible, only 0.01875% on an RP2040 (48/256000 * 100)
 
-extern int create_setting_by_interpretation_string(setting_t *setting, char *base);
-extern int create_multiple_settings_by_interpretation_string(setting_t settings[], size_t setting_count, char *base);
+extern int create_setting_from_interpretation_string(setting_t *setting, char *base, value_t default_value);
+// extern int create_multiple_settings_by_interpretation_string(setting_t settings[], size_t setting_count, char *base);
 
 #endif //__LUOS_GENERAL_SETTINGS_MANAGER__
