@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <pico/malloc.h>
+#include "LISTS.h"
 
 typedef enum setting_type {
 	// Numbers
@@ -33,7 +34,7 @@ typedef enum setting_type {
 
 	// Lists
 	SETTING_STRING_LIST_DYNAMIC,	// A list of strings, each of which is an option
-	SETTING_INT_LIST_DYNAMIC,		// A list of signed 16 bit integers, each of which is an option
+	SETTING_INT_LIST_DYNAMIC,		// A list of signed 64 bit integers, each of which is an option
 	SETTING_FLOAT_LIST_DYNAMIC,		// A list of floats, each of which is an option
 
 	SETTING_STRING_LIST_STATIC,		// Same as the list before, except the number of options is set
@@ -61,25 +62,6 @@ typedef struct range {
 	};
 } range_t;
 
-typedef struct static_list {
-	size_t capacity;
-	size_t length;
-	union {
-		char *data_string;
-		int16_t data_int;
-		float data_float;
-	};
-} static_list_t;
-
-typedef struct dynamic_list {
-	struct dynamic_list* next;
-	union {
-		char *data_string;
-		int16_t data_int;
-		float data_float;
-	};
-} dynamic_list_t;
-
 typedef union value {
 	int64_t int_64;
 	uint64_t uint_64;
@@ -87,8 +69,7 @@ typedef union value {
 	float v_float;
 	double v_double;
 
-	dynamic_list_t v_list_dynamic;
-	static_list_t v_list_static;
+	list_t v_list;
 
 	range_t v_range;
 	char *v_string;
