@@ -113,6 +113,9 @@ extern int list_add_float(list_t *src, float obj)
 	return src->length-1; // Index we added it at
 }
 
-extern lval_t list_get(list_t)
+// extern lval_t list_get(list_t)
+// {
+// 	return 0;
+// }
 
 #endif // __LUOS_SETTING_LISTS__

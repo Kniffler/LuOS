@@ -444,7 +444,10 @@ evaluate_key:
 							// This case will be handled automatically at the end of the loop.
 						}
 					break;
-					case FUNCTIONABLE: if(selected_entry->action()) { clean_everything(); }; break;
+					case FUNCTIONABLE:
+						if(selected_entry->exits) { clean_everything(); };
+						selected_entry->action();
+					break;
 					case SETTING: break;
 				}
 				// if(selected_entry->exits) { clean_everything(); }
@@ -490,6 +493,8 @@ evaluate_key:
 }
 
 
+
+
 uint16_t splitter_init(int rIDgiven, int max_depth)
 {
 	if(lcd_get_region_height(rIDgiven)<mainFont[1]*2 || lcd_get_region_width(rIDgiven)<(mainFont[0]*2)+1)
@@ -527,27 +532,30 @@ uint16_t splitter_init(int rIDgiven, int max_depth)
 	return (max_entry_name_length<<16)|max_entries_to_show;
 }
 
-bool idea(void) { watchdog_reboot(0, 0, 0); return 1; }
+static void w_reboot_wrap(void) { watchdog_reboot(0, 0, 0); return; }
 
-void start_splitter(void)
+void splitter_start(void)
 {
 	if(!inited) { return; }
 
-	static entry_t e1 = {"e1_entry entry entry entry", BRANCH}; deal_push(&root_entries, (void*)&e1);
-	static deal_t e1_ent; e1.value_p = (void*)&e1_ent;
-		static entry_t e1e1 = {"e1e1_entry", LEAF}; deal_push(&e1_ent, (void*)&e1e1);
-		static entry_t e1e2 = {"e1e2_entry", FUNCTIONABLE}; deal_push(&e1_ent, (void*)&e1e2); e1e2.action = idea;
-		static entry_t e1e3 = {"e1e3_entry", LEAF}; deal_push(&e1_ent, (void*)&e1e3);
+	// static entry_t e1 = {"e1_entry entry entry entry", BRANCH}; deal_push(&root_entries, (void*)&e1);
+	// static deal_t e1_ent; e1.value_p = (void*)&e1_ent;
+	// 	static entry_t e1e1 = {"e1e1_entry", LEAF}; deal_push(&e1_ent, (void*)&e1e1);
+	// 	static entry_t e1e2 = {"e1e2_entry", FUNCTIONABLE}; deal_push(&e1_ent, (void*)&e1e2); e1e2.action = w_reboot_wrap;
+	// 	static entry_t e1e3 = {"e1e3_entry", LEAF}; deal_push(&e1_ent, (void*)&e1e3);
+ //
+	// static entry_t e2 = {"e2_entry", BRANCH}; deal_push(&root_entries, (void*)&e2);
+	// static deal_t e2_ent; e2.value_p = (void*)&e2_ent;
+	// 	static entry_t e2e1 = {"e2e1_entry", LEAF}; deal_push(&e2_ent, (void*)&e2e1);
+ //
+	// static entry_t e3 = {"e3_entry", LEAF}; deal_push(&root_entries, (void*)&e3);
+	// static entry_t e4 = {"e4_entry", LEAF}; deal_push(&root_entries, (void*)&e4);
+ //
+	// shown_entries_left = &root_entries;
+	// shown_entries_right = &e1_ent;
 
-	static entry_t e2 = {"e2_entry", BRANCH}; deal_push(&root_entries, (void*)&e2);
-	static deal_t e2_ent; e2.value_p = (void*)&e2_ent;
-		static entry_t e2e1 = {"e2e1_entry", LEAF}; deal_push(&e2_ent, (void*)&e2e1);
-
-	static entry_t e3 = {"e3_entry", LEAF}; deal_push(&root_entries, (void*)&e3);
-	static entry_t e4 = {"e4_entry", LEAF}; deal_push(&root_entries, (void*)&e4);
-
-	shown_entries_left = &root_entries;
-	shown_entries_right = &e1_ent;
+	if(!root_entries.data) { return; }
+	// If no first entry exists, we don't update anything.
 
 	update_indexing_limits();
 	print_all_entries_on_side(shown_entries_left, current_depth, true);
@@ -557,7 +565,4 @@ void start_splitter(void)
 	watchdog_reboot(0, 0, 0);
 }
 
-/* TODO:
- * Add setting functionality, for all types
- * Add customizability
-*/
+// TODO: Literally everything with settings.

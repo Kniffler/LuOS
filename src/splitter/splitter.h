@@ -25,18 +25,18 @@ typedef struct entry_struct_t
 	char* name;
 
 	entry_type_t type;
-	// bool exits;
+	bool exits;
 
 	// All possible contents
 	union {
 		void* value_p;
-		bool(*action)(void);
+		void(*action)(void);
 	};
 } entry_t;
 
 
 extern uint16_t splitter_init(int rIDGiven, int max_depth);
-extern void start_splitter(void);
+extern void splitter_start(void);
 extern void set_status_message(char *to);
 
 #endif // __LUOS_SPLITTER__

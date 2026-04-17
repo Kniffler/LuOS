@@ -248,7 +248,7 @@ int main()
 	uint16_t name_length = splitter_init(id, 1);
 	uint8_t option_count = name_length&UINT8_MAX;
 	name_length >>= 8;
-	start_splitter();
+	splitter_start();
 
 	for(;;) { tight_loop_contents(); }
 }
