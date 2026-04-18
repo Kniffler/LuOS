@@ -31,12 +31,13 @@ static void stitch(deal_t *from, deal_t *to) { from->next = to; }
 // extern void deal_create(deal_t *origin)
 // {
 // 	if(origin->data||origin->next) { return; }
-// 	origin->data = calloc(1, sizeof(deal_store_t));
+// 	origin = calloc(1, sizeof(deal_t));
 // }
 static void deal_free_node(deal_t *node)
 {
 	node->next = NULL;
-// #ifdef DEAL_FREE_DATA
+	// node->data = NULL;
+	// #ifdef DEAL_FREE_DATA
 // 	DEAL_FREE_DATA();
 // #endif
 	free(node);
@@ -47,9 +48,12 @@ extern void deal_free(deal_t *origin)
 	if(origin->next) { deal_free(origin->next); }
 	deal_free_node(origin);
 }
-extern void deal_push(deal_t *origin, deal_store_t obj)
+extern void deal_add(deal_t *origin, deal_store_t obj)
 {
-	if(origin->next) { deal_push(origin->next, obj); return; }
+	if(!origin||!obj) { return; }
+
+	if(origin->next) { deal_add(origin->next, obj); return; }
+
 	if(!origin->data)
 	{
 		origin->data = obj;
@@ -63,18 +67,23 @@ extern void deal_push(deal_t *origin, deal_store_t obj)
 }
 extern deal_store_t deal_pop_end(deal_t *origin)
 {
-	if(origin->next->next) { return deal_pop_end(origin->next); }
-
-	if(!origin->next)
+	if(!origin || !origin->data) { return NULL; }
+	if(!origin->next) // In case we only have 1 element
 	{
 		deal_store_t ret = origin->data;
-		deal_free_node(origin);
+		origin->data = NULL;
 		return ret;
 	}
+
+	if(origin->next && origin->next->next) { return deal_pop_end(origin->next); }
+
+	// origin->next HAS to exist, since we had a guard clause
+
 	deal_store_t ret = origin->next->data;
+	origin->next->data = NULL;
 	deal_free_node(origin->next);
 	origin->next = NULL;
-	return ret;
+	return (ret) ? ret : NULL;
 }
 extern size_t deal_get_length(deal_t *origin)
 {
@@ -102,16 +111,37 @@ extern void deal_set(deal_t *origin, uint16_t index, deal_store_t obj)
 	origin->data = obj;
 }
 
-extern deal_store_t deal_pop_cascading(deal_t* origin, uint16_t index)
+extern deal_store_t deal_pop_cascading(deal_t *origin, uint16_t index)
 {
 	if(index==deal_get_length(origin)-1) { return deal_pop_end(origin); }
 	if(index>=deal_get_length(origin)) { return NULL; }
-	if(index!=1&&origin->next) { deal_pop_cascading(origin->next, index-1); return NULL; }
+	if(index>1&&origin->next) { return deal_pop_cascading(origin->next, index-1); }
+
+	if(!origin->next)
+	{
+		deal_store_t data = (origin->data) ? origin->data : NULL;
+		if(data) { origin->data = NULL; }
+		return data;
+	}
+
 	deal_t *to_delete = origin->next;
 	deal_store_t to_return = origin->data;
-	stitch(origin, origin->next->next);
+
+	if(origin->next->next) { stitch(origin, origin->next->next); }
+
 	deal_free_node(to_delete);
 	return to_return;
 }
+
+// extern void deal_execute_per_node(deal_t *src, void(function)(deal_t *obj))
+// {
+// 	if(!src) { return; }
+// 	function(src);
+//
+// 	if(!src->next) { return; }
+// 	deal_execute_per_node(src->next, function);
+//
+// 	return;
+// }
 
 #endif // __DYNAMIC_ENTRY_ALLOCATOR__

@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "hardware/gpio.h"
-#include "i2ckbd.h"
+// #include "i2ckbd.h"
 #include "lcdspi.h"
 #include "splitter.h"
 #include <hardware/flash.h>
@@ -17,6 +17,9 @@
 #include "blockdevice/sd.h"
 #include "filesystem/fat.h"
 #include "filesystem/vfs.h"
+#include "sys/dirent.h"
+#include <dirent.h>
+
 /*
  * #include "text_directory_ui.h"
  * #include "key_event.h"
@@ -31,6 +34,9 @@
 #define VTOR_OFFSET M33_VTOR_OFFSET
 #define MAX_RAM 0x20080000
 #endif
+
+static char *root = "/sd";
+const int max_depth = 5;
 
 bool sd_card_inserted(void)
 {
@@ -49,14 +55,16 @@ bool fs_init(void)
 
 	filesystem_t *fat = filesystem_fat_create();
 
-	int err = fs_mount("/sd", fat, sd);
+	int err = fs_mount(root, fat, sd);
 	if (err != -1) { return true; }
 
 	err = fs_format(fat, sd);
 	if (err == -1) { return false; }
 
-	err = fs_mount("/sd", fat, sd);
+	err = fs_mount(root, fat, sd);
 	if (err == -1) { return false; }
+
+	// fs = fat;
 	return true;
 }
 
@@ -233,6 +241,55 @@ void final_selection_callback(const char *path)
 	load_and_launch_firmware_by_path(path);
 }
 
+int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_abs, int depth)
+{
+	// set_status_message("We in da function!");
+	if(depth<=0) { return -1; }
+	static char msg[128];
+	struct dirent *ent;
+	while((ent = readdir(root_dir))!=NULL)
+	{
+
+		bool is_dir = ent->d_type == DT_DIR;
+
+		// snprintf(msg, sizeof(msg), "Working on: %s/|%s|%c", parent_folder_path_abs, ent->d_name, (is_dir) ? '/' : '\0');
+		// set_status_message(msg);
+
+		int ID = create_entry_return_ID(ent->d_name, (is_dir) ? BRANCH : FUNCTIONABLE, 0, (entry_value_t){.p=NULL});
+		if(ID<1)
+		{
+			snprintf(msg, sizeof(msg), "Failed, with exit num %d", ID);
+			set_status_message(msg);
+			return -2;
+		}
+
+		if(is_dir)
+		{
+			// snprintf(msg, sizeof(msg), "New entry \"%s\" is a dir", ent->d_name);
+			// set_status_message(msg);
+
+			char *new_path = calloc(strlen(parent_folder_path_abs)+strlen(ent->d_name)+1, sizeof(char));
+			strcpy(new_path, parent_folder_path_abs);
+			strcat(new_path, "/");
+			strcat(new_path, ent->d_name);
+
+			// sleep_ms(300);
+			// snprintf(msg, sizeof(msg), "New path: %s", new_path);
+			// set_status_message(msg);
+
+			DIR *next = opendir(new_path);
+			setup_entry_structure(ID, next, new_path, depth-1);
+			closedir(next);
+
+			free(new_path);
+		}
+		append_entry_to_branch(parentID, ID);
+		// sleep_ms(1000);
+	}
+	// if(parent_folder_path_abs!=root) { free(parent_folder_path_abs); }
+	return 0;
+}
+
 int main()
 {
 	stdio_init_all();
@@ -245,9 +302,43 @@ int main()
 	lcd_init();
 	lcd_clear();
 	int id = lcd_region_create(0, 0, LCD_WIDTH, LCD_HEIGHT);
-	uint16_t name_length = splitter_init(id, 1);
+	uint16_t name_length = splitter_init(id, max_depth);
 	uint8_t option_count = name_length&UINT8_MAX;
 	name_length >>= 8;
+
+	bool give_settle_time = false;
+	while(!sd_card_inserted())
+	{
+		set_status_message("No SD card found; please insert SD card");
+		sleep_ms(30);
+		give_settle_time = true;
+		tight_loop_contents();
+	}
+	set_status_message("SD card found! | Initing file system...");
+	if(give_settle_time) { sleep_ms(1300); } // Give the user time to properly set the SD card into the slot.
+
+	if(!fs_init())
+	{
+		set_status_message("Error: fs_init failed, rebooting...");
+		sleep_ms(850);
+		watchdog_reboot(0, 0, 0);
+	}
+
+	DIR *root_dir = opendir(root);
+	if(!root_dir)
+	{
+		set_status_message("Root not found");
+		root_dir = opendir(root);
+		sleep_ms(200);
+		if(!root_dir) { watchdog_reboot(0, 0, 0); }
+	}
+	set_status_message("Creating splitter menu...");
+
+	setup_entry_structure(0, root_dir, root, max_depth);
+	set_status_message("Created splitter menu!");
+
+	closedir(root_dir);
+
 	splitter_start();
 
 	for(;;) { tight_loop_contents(); }

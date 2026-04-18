@@ -27,7 +27,7 @@
 static inline void stall_until_fifo_Wready() { while(!multicore_fifo_wready()) { tight_loop_contents(); } }
 static inline void stall_until_fifo_Rvalid() { while(!multicore_fifo_rvalid()) { tight_loop_contents(); } }
 
-static volatile uint8_t handshakeComplete = 0;
+static volatile bool handshakeComplete = 0;
 
 static void fifo_send_uint64(uint64_t data)
 {
