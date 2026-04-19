@@ -75,7 +75,7 @@ extern void enable_core1_lcdspi()
 	while(!handshakeComplete) { tight_loop_contents(); } // Allow for the core to lauch
 }
 
-extern void lcdc1_print_string(int32_t rID, char* str)
+extern void lcdc1_print_string(int32_t rID, volatile char* str)
 {
 	stall_until_fifo_Wready();
 	multicore_fifo_push_blocking( (uint32_t)(CMD_PRINT_STRING) );
@@ -83,7 +83,7 @@ extern void lcdc1_print_string(int32_t rID, char* str)
 
 	fifo_send_uint64((uint64_t)str);
 }
-extern void lcdc1_putc(int32_t rID, char c)
+extern void lcdc1_putc(int32_t rID, volatile char c)
 {
 	stall_until_fifo_Wready();
 	multicore_fifo_push_blocking( (uint32_t)(CMD_PRINT_CHAR) );

@@ -30,17 +30,17 @@ static bool inited = 0;
 static uint8_t max_entry_name_length = 0;
 static uint8_t max_entries_to_show = 0;
 static uint8_t max_entry_depth = 0;
-static char *empty_entry_name;
+volatile char *empty_entry_name;
 
 static uint16_t right_side_offset = 0;
 static uint8_t divider_width = 0;
 
 
-static uint16_t right_indexing_limit_upper = 0;
-static uint16_t right_indexing_limit_lower = 0;
+static int32_t right_indexing_limit_upper = 0;
+static int32_t right_indexing_limit_lower = 0;
 
-static uint16_t left_indexing_limit_upper = 0;
-static uint16_t left_indexing_limit_lower = 0;
+static int32_t left_indexing_limit_upper = 0;
+static int32_t left_indexing_limit_lower = 0;
 
 // Entry variables
 static deal_t root_entries;
@@ -48,12 +48,16 @@ static deal_t *shown_entries_right;
 static deal_t *shown_entries_left;
 static deal_t offscreen_entries_left;
 
+// Tracking
 static deal_t entry_path;
+static entry_t *last_branch;
 
 // Selector/cursor stuff
 static bool selector_on_right = 0; // Can only be on the left (0) or right (1)
+static bool prev_selector_right = 0;
 
-static uint8_t selector_y = 0;
+static int16_t selector_y = 0;
+static int16_t prev_selector_y = 0;
 
 static int16_t current_depth = 0;
 
@@ -75,7 +79,7 @@ static void free_all_entries(deal_t *src)
 	{
 		entry_t *subject = (entry_t*)deal_get(src, i);
 
-		free(subject->name);
+		free((char*)subject->name);
 		if(subject->type == BRANCH)
 		{
 			free_all_entries((deal_t *)subject->value.p);
@@ -88,7 +92,7 @@ static void free_all_entries(deal_t *src)
 
 void splitter_free_everything()
 {
-	free(empty_entry_name);
+	free((char*)empty_entry_name);
 	free(edit_print);
 	free(last_msg);
 	free_all_entries(&root_entries);
@@ -97,7 +101,7 @@ void splitter_free_everything()
 static int min(int a, int b) { return (a>b) ? b : a; }
 static int max(int a, int b) { return (a>b) ? a : b; }
 
-static void clean_message(char *msg, size_t size_limit)
+static void clean_string(char *msg, size_t size_limit)
 {
 	for(int i = 0; i < strlen(msg); i++)
 	{
@@ -119,9 +123,9 @@ static void clean_message(char *msg, size_t size_limit)
 	}
 }
 
-void set_status_message(char *to)
+void set_status_message(volatile char *to)
 {
-	if(in_setting_editor || strcmp(last_msg, to)==0) { return; }
+	if(in_setting_editor || strcmp(last_msg, (char*)to)==0) { return; }
 
 	int16_t temp_x = lcdc1_get_current_x(rID);
 	int16_t temp_y = lcdc1_get_current_y(rID);
@@ -131,7 +135,7 @@ void set_status_message(char *to)
 	int16_t name_limit = lcdc1_get_region_width(rID)/mainFont[0];
 	name_limit = (name_limit>1) ? name_limit : 3;
 
-	clean_message(to, name_limit);
+	clean_string((char*)to, name_limit);
 
 	for(uint8_t i = 0; i < name_limit; i++)
 	{
@@ -142,7 +146,7 @@ void set_status_message(char *to)
 
 	lcdc1_region_set_current(rID, temp_x, temp_y);
 
-	strncpy(last_msg, to, name_limit);
+	strncpy(last_msg, (char*)to, name_limit);
 }
 
 extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, entry_value_t value)
@@ -155,7 +159,7 @@ extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, ent
 	new_entry->name = calloc(strlen(name), sizeof(char));
 	if(!new_entry->name) { return -3; }
 
-	strcpy(new_entry->name, name);
+	strcpy((char*)new_entry->name, name);
 	new_entry->type = type;
 	new_entry->exits = exits;
 
@@ -250,7 +254,7 @@ extern char* get_past_entries_filepath_style()
 		// 	strncpy(out, entry->name, strlen(entry->name));
 		// }else {
 			strcat(out, "/");
-			strcat(out, entry->name);
+			strcat(out, (char*)entry->name);
 		// }
 	}
 	return out;
@@ -335,7 +339,7 @@ static void draw_middle_line()
 
 static void advance_print_y(bool on_left_side) { lcdc1_region_set_current(rID, lcdc1_get_current_x(rID), lcdc1_get_current_y(rID)+mainFont[1]); }
 
-static void print_and_cut_entry_name(char *entry_name, bool is_on_right, bool highlight)
+static void print_and_cut_entry_name(volatile char *entry_name, bool is_on_right, bool highlight)
 {
 	if(!entry_name) { return; }
 
@@ -349,7 +353,7 @@ static void print_and_cut_entry_name(char *entry_name, bool is_on_right, bool hi
 	// }
 
 	char limited_name[max_entry_name_length+1];
-	strncpy(limited_name, entry_name, max_entry_name_length);
+	strncpy(limited_name, (const char*)entry_name, max_entry_name_length);
 	limited_name[max_entry_name_length] = '\0';
 	#ifndef CENTER_EACH_ENTRY
 	lcdc1_region_set_current(rID, (isOnRight) ? right_side_offset : 0, lcdc1_get_current_y(rID));
@@ -363,7 +367,7 @@ static void print_and_cut_entry_name(char *entry_name, bool is_on_right, bool hi
 	if(highlight) { lcdc1_putc(rID, '\016'); }
 }
 
-static void update_indexing_limits()
+static void index_limits_bounds_check()
 {
 	right_indexing_limit_lower = max(right_indexing_limit_lower, 0);
 	left_indexing_limit_lower = max(left_indexing_limit_lower, 0);
@@ -372,7 +376,7 @@ static void update_indexing_limits()
 	left_indexing_limit_upper = min(right_indexing_limit_lower+max_entries_to_show, deal_get_length(shown_entries_left));
 }
 
-static void set_entry_name(uint16_t from_top_index, bool on_left_side, char* to)
+static void set_entry_name(uint16_t from_top_index, bool on_left_side, volatile char* to)
 {
 	lcdc1_region_set_current(rID, (on_left_side) ? 0 : right_side_offset, from_top_index*mainFont[1]);
 	lcdc1_print_string(rID, to);
@@ -386,25 +390,19 @@ static void clear_respective_list(bool on_left_side)
 	lcdc1_reset_coords(rID);
 }
 
-static void print_all_entries_on_side(deal_t* root, bool on_left_side, bool invert_highlight_condition)
+static void print_all_entries_on_side(deal_t* root, bool on_left_side)
 {
 	if(!root) { return; }
-	bool highlight = !((selector_on_right==on_left_side)^(invert_highlight_condition));
-	// Same as:
-	// if(selector_on_right!=on_left_side && !invert_highlight_condition) { highlight = true; }
-	// if(selector_on_right==on_left_side && invert_highlight_condition) { highlight = true; }
-	// if(selector_on_right!=on_left_side && invert_highlight_condition) { highlight = false; }
-	// if(selector_on_right==on_left_side && !invert_highlight_condition) { highlight = false; }
 	clear_respective_list(on_left_side);
-	update_indexing_limits();
-	uint16_t upper_index_limit = (!on_left_side) ? right_indexing_limit_upper : left_indexing_limit_upper;
-	uint16_t lower_index_limit = (!on_left_side) ? right_indexing_limit_lower : left_indexing_limit_lower;
+	index_limits_bounds_check();
+	int32_t upper_index_limit = (!on_left_side) ? right_indexing_limit_upper : left_indexing_limit_upper;
+	int32_t lower_index_limit = (!on_left_side) ? right_indexing_limit_lower : left_indexing_limit_lower;
 
 	for(int16_t i = lower_index_limit; i < upper_index_limit; i++)
 	{
-		entry_t *entry = (entry_t*)deal_get(root, i);
+		volatile entry_t *entry = (entry_t*)deal_get(root, i);
 		if(!entry) { print_and_cut_entry_name("--Null entry--", !on_left_side, selector_y+lower_index_limit==i); continue; }
-		print_and_cut_entry_name(entry->name, !on_left_side, selector_y+lower_index_limit==i && highlight );
+		print_and_cut_entry_name(entry->name, !on_left_side, selector_y+lower_index_limit==i && selector_on_right!=on_left_side );
 		advance_print_y(on_left_side);
 	}
 }
@@ -417,21 +415,81 @@ static void rewrite_entry(bool on_left_side, uint16_t index)
 	lcdc1_region_set_current(rID, 0, index*mainFont[1]);
 	// X does not interest us here, the print_and_cut_entry_name funtion sets it automatically, but we do have to specify a y value
 
-	char *name_indx = ((entry_t*)deal_get(relevant_side, index+lower_index_limit))->name;
+	volatile char *name_indx = ((entry_t*)deal_get(relevant_side, index+lower_index_limit))->name;
 	print_and_cut_entry_name(name_indx, !on_left_side, (index==selector_y&&on_left_side==!selector_on_right));
 }
 
-static void rewrite_2_entries_on_side(bool on_left_side, uint16_t index1, uint16_t index2)
+static inline void rewrite_2_entries_on_side(bool on_left_side, uint16_t index1, uint16_t index2)
 {
 	rewrite_entry(on_left_side, index1);
 	rewrite_entry(on_left_side, index2);
 }
 
+static inline void sel_y_bounds_check()
+{
+	index_limits_bounds_check();
+	int32_t lower_index_limit_cy = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
+	int32_t upper_index_limit_cy = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
 
-static void handle_selector_side_change(deal_t *relative_side, deal_t *relative_opposite_side, uint16_t lower_index_limit, uint8_t prev_selector_y, bool is_expand)
+	int32_t lower_index_limit_py = (prev_selector_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
+	int32_t upper_index_limit_py = (prev_selector_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
+
+	int32_t limit_cy = min(upper_index_limit_cy, max_entries_to_show);
+	int32_t limit_py = min(upper_index_limit_py, max_entries_to_show);
+
+	bool above_cy = selector_y+lower_index_limit_cy>=limit_cy;
+	bool below_cy = selector_y<0;
+
+	bool above_py = prev_selector_y+lower_index_limit_py>=limit_py;
+	bool below_py = prev_selector_y<0;
+
+	if(above_cy || below_cy)
+		{ selector_y = (below_cy) ? max(0, selector_y) : min(limit_cy-1, selector_y); }
+	if(above_py || below_py)
+		{ prev_selector_y = (below_py) ? max(0, prev_selector_y) : min(limit_py-1, prev_selector_y); }
+}
+
+static void move_selector_vertical(int amount)
+{
+	selector_y += amount;
+
+	deal_t *relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
+
+	int32_t lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
+	int32_t upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
+
+	int32_t limit = min(upper_index_limit, max_entries_to_show);
+
+	bool above = selector_y+lower_index_limit>=limit;
+	bool below = selector_y<0;
+
+	if((above || below) && !(lower_index_limit+max_entries_to_show>upper_index_limit))
+	{
+		if(selector_on_right)
+		{
+			right_indexing_limit_lower += (below) ? -1 : +1;
+			right_indexing_limit_upper += (below) ? -1 : +1;
+			index_limits_bounds_check();
+			sel_y_bounds_check();
+			print_all_entries_on_side(shown_entries_right, false);
+
+		}else
+		{
+			left_indexing_limit_lower += (below) ? -1 : +1;
+			left_indexing_limit_upper += (below) ? -1 : +1;
+			index_limits_bounds_check();
+			sel_y_bounds_check();
+			print_all_entries_on_side(shown_entries_left, true);
+		}
+		return;
+	}
+	sel_y_bounds_check();
+	rewrite_2_entries_on_side(!selector_on_right, selector_y, prev_selector_y);
+}
+
+static inline void handle_selector_side_change(deal_t *relative_side, deal_t *relative_opposite_side, uint16_t lower_index_limit, bool is_expand)
 {
 	current_depth += (is_expand) ? 0 : ((selector_on_right) ? -1 : +1); // Adjust the depth based on the side we switch to
-
 	// Basically the same as:
 	// if(!selector_on_right && is_expand) { current_depth; }
 	// if(selector_on_right && is_expand) { current_depth; }
@@ -449,7 +507,7 @@ static void handle_selector_side_change(deal_t *relative_side, deal_t *relative_
 			deal_get_length(relative_opposite_side)-1
 	;
 	selector_on_right = !selector_on_right;
-
+	sel_y_bounds_check();
 }
 
 
@@ -479,10 +537,7 @@ static void expand_entry_on_right(entry_t *subject)
 	right_indexing_limit_lower = 0;
 	right_indexing_limit_upper = deal_get_length(shown_entries_right);
 
-	update_indexing_limits();
-
-	print_all_entries_on_side(shown_entries_right, false, true);
-	print_all_entries_on_side(shown_entries_left, true, true);
+	index_limits_bounds_check();
 
 	deal_add(&entry_path, get_currently_selected_entry());
 }
@@ -513,10 +568,7 @@ static void return_entry_on_left()
 	left_indexing_limit_lower = 0;
 	left_indexing_limit_upper = deal_get_length(shown_entries_left);
 
-	update_indexing_limits();
-
-	print_all_entries_on_side(shown_entries_left, true, true);
-	print_all_entries_on_side(shown_entries_right, false, true);
+	index_limits_bounds_check();
 
 	deal_pop_end(&entry_path);
 }
@@ -526,24 +578,29 @@ static void kbd_task(void)
 	static int key;
 	static int bat;
 	char buf[LCD_WIDTH/mainFont[0]];
-	char *msg = get_past_entries_filepath_style();
+	char *msg = NULL;
 
 	for(;;)
 	{
 		key = read_i2c_kbd();
 		bat = read_battery();
-		if(key == -1 || key < 0) { sleep_ms(40); continue; }
+		if(key == -1 || key < 0) { tight_loop_contents(); continue; }
 
 		deal_t *relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
 		deal_t *relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
 
-		uint16_t upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
-		uint16_t lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
+		int32_t upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
+		int32_t lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
 
-		uint8_t prev_selector_y = selector_y;
-		bool prev_selector_right = selector_on_right;
+		prev_selector_y = selector_y;
+		prev_selector_right = selector_on_right;
+
+		sel_y_bounds_check();
+
 
 		entry_t *selected_entry = (entry_t*)deal_get(relative_side, lower_index_limit+selector_y);
+
+		if(selected_entry->type==BRANCH && selected_entry != last_branch) { last_branch = selected_entry; }
 
 		bool is_expand = false;
 
@@ -551,86 +608,73 @@ evaluate_key:
 		switch(key)
 		{
 			case KEY_DOWN:
-				if(selector_y+lower_index_limit+1<deal_get_length(relative_side))
-				{
-					selector_y++;
-					rewrite_2_entries_on_side(!selector_on_right, selector_y, selector_y-1);
-				}
-				if(selector_y+lower_index_limit>=upper_index_limit)
-				{
-					selector_y = upper_index_limit-1;
-					(selector_on_right) ? right_indexing_limit_upper++ : left_indexing_limit_upper++;
-					(selector_on_right) ? right_indexing_limit_lower++ : left_indexing_limit_lower++;
-					update_indexing_limits();
-				}
+				move_selector_vertical(+1);
+
 				deal_pop_end(&entry_path);
 				deal_add(&entry_path, get_currently_selected_entry());
-			break;
+				break;
 
 			case KEY_UP:
-				if(selector_y+lower_index_limit-1<deal_get_length(relative_side) && selector_y+lower_index_limit-1>=0)
-				{
-					selector_y--;
-					rewrite_2_entries_on_side(!selector_on_right, selector_y, selector_y+1);
-				}
-				if(selector_y<0)
-				{
-					selector_y = 0;
-					(selector_on_right) ? right_indexing_limit_upper-- : left_indexing_limit_upper--;
-					(selector_on_right) ? right_indexing_limit_lower-- : left_indexing_limit_lower--;
-					update_indexing_limits();
-				}
+				move_selector_vertical(-1);
 
 				deal_pop_end(&entry_path);
 				deal_add(&entry_path, get_currently_selected_entry());
 			break;
 
 			case KEY_LEFT:
-				if(can_return_entry_on_left())
+				if(!can_return_entry_on_left())
 				{
-					return_entry_on_left();
-
-					relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
-					relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
-
-					upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
-					lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
-					update_indexing_limits();
-					is_expand = true;
-				}
-
-				handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, prev_selector_y, is_expand);
-
-				rewrite_entry(!selector_on_right, selector_y);
-				if(!is_expand)
-				{
+					handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, false);
+					if(prev_selector_y != selector_y)
+					{
+						deal_pop_end(&entry_path);
+					}
 					deal_pop_end(&entry_path);
+
+					rewrite_entry(!selector_on_right, selector_y);
 					rewrite_entry(!prev_selector_right, prev_selector_y);
+					break;
 				}
+				return_entry_on_left();
+
+				relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
+				relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
+
+				index_limits_bounds_check();
+				upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
+				lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
+				handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, true);
+
+				print_all_entries_on_side(shown_entries_left, true);
+				print_all_entries_on_side(shown_entries_right, false);
 			break;
 
 			case KEY_RIGHT:
-				if(can_expand_entry_on_right(selected_entry))
+				if(!can_expand_entry_on_right(selected_entry))
 				{
-					expand_entry_on_right(selected_entry);
-
-					relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
-					relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
-
-					upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
-					lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
-					update_indexing_limits();
-					is_expand = true;
-				}
-
-				handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, prev_selector_y, is_expand);
-
-				rewrite_entry(!selector_on_right, selector_y);
-				if(!is_expand)
-				{
+					handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, false);
+					if(prev_selector_y != selector_y)
+					{
+						deal_pop_end(&entry_path);
+						deal_add(&entry_path, last_branch);
+					}
 					deal_add(&entry_path, get_currently_selected_entry());
+					rewrite_entry(!selector_on_right, selector_y);
 					rewrite_entry(!prev_selector_right, prev_selector_y);
+					break;
 				}
+				expand_entry_on_right(selected_entry);
+
+				relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
+				relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
+
+				index_limits_bounds_check();
+				upper_index_limit = (selector_on_right) ? right_indexing_limit_upper : left_indexing_limit_upper;
+				lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
+				handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, true);
+
+				print_all_entries_on_side(shown_entries_right, false);
+				print_all_entries_on_side(shown_entries_left, true);
 
 			break;
 
@@ -643,7 +687,12 @@ evaluate_key:
 						else if(!selector_on_right) { key=KEY_LEFT; goto evaluate_key; }
 					break;
 					case FUNCTIONABLE:
-						if(selected_entry->exits) { free(msg); splitter_free_everything(); };
+						if(!selected_entry->value.action) { break; }
+						if(selected_entry->exits)
+						{
+							if(msg) { free(msg); }
+							splitter_free_everything();
+						};
 						selected_entry->value.action();
 					break;
 					case SETTING: break;
@@ -670,8 +719,8 @@ evaluate_key:
 		relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
 		selected_entry = (entry_t*)deal_get(relative_side, lower_index_limit+selector_y);
 
-		// snprintf(buf, sizeof(buf), "sel_Y|depth|on_right  %d | %d | %d", selector_y, current_depth, selector_on_right);
-		// set_status_message(buf);
+		snprintf(buf, sizeof(buf), "sel_Y|depth|on_right  %d | %d | %d", selector_y, current_depth, selector_on_right);
+		set_status_message(buf);
 
 		// Fancy stuff
 		if(selected_entry && selected_entry->type==BRANCH && !selector_on_right
@@ -687,12 +736,12 @@ evaluate_key:
 		{
 			shown_entries_right = (deal_t*)(selected_entry->value.p);
 			// relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
-			print_all_entries_on_side(shown_entries_right, selector_on_right, false);
+			print_all_entries_on_side(shown_entries_right, selector_on_right);
 		}
-		update_indexing_limits();
-		free(msg);
-		msg = get_past_entries_filepath_style();
-		set_status_message(msg);
+		index_limits_bounds_check();
+		// if(msg) { free(msg); }
+		// msg = get_past_entries_filepath_style();
+		// set_status_message(msg);
 	}
 }
 
@@ -723,8 +772,9 @@ uint16_t splitter_init(int rIDgiven, int maxDepth)
 	message_y_start = (max_entries_to_show*mainFont[1]);
 
 	empty_entry_name = calloc(max_entry_name_length+1, sizeof(char));
-	memset(empty_entry_name, ' ', max_entry_name_length);
+	memset((char*)empty_entry_name, ' ', max_entry_name_length);
 	empty_entry_name[max_entry_name_length] = '\0';
+	clean_string((char*)empty_entry_name, max_entry_name_length);
 
 	edit_print = calloc(lcd_get_region_width(rID)/mainFont[0], sizeof(char));
 	last_msg = calloc(lcd_get_region_width(rID)/mainFont[0], sizeof(char));
@@ -773,9 +823,9 @@ void splitter_start(void)
 	}
 	deal_add(&entry_path, first_selected);
 
-	update_indexing_limits();
-	print_all_entries_on_side(shown_entries_left, true, false);
-	print_all_entries_on_side(shown_entries_right, false, false);
+	index_limits_bounds_check();
+	print_all_entries_on_side(shown_entries_left, true);
+	print_all_entries_on_side(shown_entries_right, false);
 	draw_middle_line();
 	kbd_task();
 
@@ -786,5 +836,6 @@ void splitter_start(void)
 
 /* TODO:
  * Literally everything with settings.
- * Proper path tracking
+ * Fix race conditions
+ * Fix that random underline
 */

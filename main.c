@@ -245,7 +245,7 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 {
 	// set_status_message("We in da function!");
 	if(depth<=0) { return -1; }
-	static char msg[128];
+	volatile char msg[128];
 	struct dirent *ent;
 	while((ent = readdir(root_dir))!=NULL)
 	{
@@ -258,7 +258,7 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 		int ID = create_entry_return_ID(ent->d_name, (is_dir) ? BRANCH : FUNCTIONABLE, 0, (entry_value_t){.p=NULL});
 		if(ID<1)
 		{
-			snprintf(msg, sizeof(msg), "Failed, with exit num %d", ID);
+			snprintf((char*)msg, sizeof(msg), "Failed, with exit num %d", ID);
 			set_status_message(msg);
 			return -2;
 		}

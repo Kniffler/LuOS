@@ -78,7 +78,7 @@ In terms of libraries and resources of others, I have:
 There is also [this article](https://github.com/adwuard/Picocalc_SD_Boot) which is linked in the Picocalc_SD_Boot repository source code. It goes into detail about the boot routine of the pico and paints a great picture of how the bootloader code works. I highly recommend checking it out.
 
 
-`lcdpsi` has been heavily modified to work with so called regions. Every app now needs to define one or more regions of the screen via the `lcd_region_create` function. This has also made the library considerably harder to read. In the future, comments will be added and the code will be revised in order to combat this issue.
+`lcdspi` has been heavily modified to work with so called regions. Every app now needs to define one or more regions of the screen via the `lcd_region_create` function. This has also made the library considerably harder to read. In the future, comments will be added and the code will be revised in order to combat this issue.
 
 Further explanations for regions may or may not be added to the README and a wiki (if I ever get around to making a wiki that is)
 
