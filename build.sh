@@ -3,7 +3,7 @@
 cmake -DPICO_SDK_PATH=$HOME/pico-sdk -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -B build
 make -C build
 
-OUTPUT_FILE="build/LUOS.uf2"
+OUTPUT_FILE="build/LuOS.uf2"
 DEVICE_MOUNTS_BY_NAME="RPI-RP2"
 
 DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')
@@ -19,7 +19,6 @@ while true; do
 
 			sync
 			umount "$MOUNT_POINT"
-			sleep 1
 			break
 		fi
 	fi
@@ -27,9 +26,14 @@ while true; do
 	DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')
 done
 
+sleep 3
 # https://www.pragmaticlinux.com/2023/01/how-to-list-all-serial-ports-on-linux/
-# PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
-# while [ "$PORT" ]; do
-# 	PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
-# done
-# konsole --hold -e screen "$PORT"
+PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep -m 1 -v "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
+while [ true ]; do
+	if [ "$PORT" ]; then
+		break
+	fi
+	sleep 1
+	PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep -m 1 -v "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
+done
+konsole --hold -e picocom "$PORT" &

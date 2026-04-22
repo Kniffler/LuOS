@@ -28,7 +28,7 @@ typedef union entry_value {
 
 typedef struct entry_struct_t
 {
-	volatile char* name;
+	char* name;
 	entry_type_t type;
 	bool exits;
 
@@ -40,7 +40,7 @@ typedef struct entry_struct_t
 extern void splitter_free_everything(void);
 extern uint16_t splitter_init(int rIDGiven, int maxDepth);
 extern void splitter_start(void);
-extern void set_status_message(volatile char *to);
+extern void set_status_message(char *to);
 
 
 extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, entry_value_t value);

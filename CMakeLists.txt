@@ -5,7 +5,7 @@ include(pico_sdk_import.cmake)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-project(LUOS C CXX ASM)
+project(LuOS C CXX ASM)
 
 pico_sdk_init()
 
@@ -20,20 +20,24 @@ add_subdirectory(src/lcdspi)
 add_subdirectory(src/splitter)
 add_subdirectory(src/GSM)
 
-add_executable(LUOS main.c)
+add_executable(LuOS main.c)
 
 add_compile_options(-Wall
 	# -Wno-format
 		# int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
 	# -Wno-unused-function
 		# we have some from the docs that aren't called
+	-Wno-pointer-to-int-cast
+	-Wno-int-to-pointer-cast
+		# There are necessary conversions when using the FIFOs between cores.
+
 	-Wno-maybe-uninitialized
 	-Os
 )
 
 string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
 
-target_link_libraries(LUOS
+target_link_libraries(LuOS
 	pico_stdlib
 	pico_bootsel_via_double_reset
 	hardware_flash
@@ -53,10 +57,10 @@ target_link_libraries(LUOS
 	filesystem_vfs
 )
 
-pico_enable_stdio_usb(LUOS 0)
-pico_enable_stdio_uart(LUOS 0)
+pico_enable_stdio_usb(LuOS 1)
+pico_enable_stdio_uart(LuOS 0)
 
-pico_add_extra_outputs(LUOS)
+pico_add_extra_outputs(LuOS)
 
 # pico_enable_filesystem(${CMAKE_PROJECT_NAME})
 

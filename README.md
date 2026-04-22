@@ -63,7 +63,7 @@ pico 2/2w:
 cmake -B build -DPICO_BOARD=pico2
 make -C build
 ```
-The resultant uf2 file can now be found under /path/of/repository/LuOS/build/LUOS.uf2
+The resultant uf2 file can now be found under /path/of/repository/LuOS/build/LuOS.uf2
 
 > [!IMPORTANT]
 > The `build.sh` script is not to be used if you want to run this project as is. If you plan on modifying the source code then this script is at your disposal for quick debugging, however you will need to change the DEVICE_MOUNTS_BY_NAME variable in the script if your pico mounts under a different label.

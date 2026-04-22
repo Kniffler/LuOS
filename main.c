@@ -1,5 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <pico/stdio.h>
+#include <pico/stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include "hardware/gpio.h"
@@ -20,6 +22,7 @@
 #include "sys/dirent.h"
 #include <dirent.h>
 
+#include "src/include/debug.h"
 /*
  * #include "text_directory_ui.h"
  * #include "key_event.h"
@@ -36,7 +39,7 @@
 #endif
 
 static char *root = "/sd";
-const int max_depth = 5;
+const int max_depth = 4;
 
 bool sd_card_inserted(void)
 {
@@ -56,15 +59,27 @@ bool fs_init(void)
 	filesystem_t *fat = filesystem_fat_create();
 
 	int err = fs_mount(root, fat, sd);
-	if (err != -1) { return true; }
+	if (err != -1)
+	{
+		DEBUG_PRINT("Mounted SD card at %s\n", root);
+		return true;
+	}
 
 	err = fs_format(fat, sd);
-	if (err == -1) { return false; }
+	if (err == -1)
+	{
+		DEBUG_PRINT_ERR("Failed to format SD card\n");
+		return false;
+	}
 
 	err = fs_mount(root, fat, sd);
-	if (err == -1) { return false; }
+	if (err == -1)
+	{
+		DEBUG_PRINT_ERR("Failed to mount SD card at %s\n", root);
+		return false;
+	}
 
-	// fs = fat;
+	DEBUG_PRINT("Mounted SD card at %s\n", root);
 	return true;
 }
 
@@ -245,7 +260,7 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 {
 	// set_status_message("We in da function!");
 	if(depth<=0) { return -1; }
-	volatile char msg[128];
+	char msg[128];
 	struct dirent *ent;
 	while((ent = readdir(root_dir))!=NULL)
 	{
@@ -254,21 +269,32 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 
 		// snprintf(msg, sizeof(msg), "Working on: %s/|%s|%c", parent_folder_path_abs, ent->d_name, (is_dir) ? '/' : '\0');
 		// set_status_message(msg);
+		entry_value_t potential_value;
+		if(is_dir)
+		{
+			potential_value.p = calloc(1, sizeof(entry_value_t));
+		}else
+		{
+			potential_value.action = NULL;
+		}
 
-		int ID = create_entry_return_ID(ent->d_name, (is_dir) ? BRANCH : FUNCTIONABLE, 0, (entry_value_t){.p=NULL});
+		int ID = create_entry_return_ID(ent->d_name, (is_dir) ? BRANCH : FUNCTIONABLE, 0, potential_value);
 		if(ID<1)
 		{
 			snprintf((char*)msg, sizeof(msg), "Failed, with exit num %d", ID);
 			set_status_message(msg);
+			if(potential_value.p) { free(potential_value.p); }
 			return -2;
 		}
 
 		if(is_dir)
 		{
+			DEBUG_PRINT("Directory found, creating children...\n");
 			// snprintf(msg, sizeof(msg), "New entry \"%s\" is a dir", ent->d_name);
 			// set_status_message(msg);
 
 			char *new_path = calloc(strlen(parent_folder_path_abs)+strlen(ent->d_name)+1, sizeof(char));
+			if(!new_path) { set_status_message("Error: failed to allocate entry name"); return -3; }
 			strcpy(new_path, parent_folder_path_abs);
 			strcat(new_path, "/");
 			strcat(new_path, ent->d_name);
@@ -287,13 +313,27 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 		// sleep_ms(1000);
 	}
 	// if(parent_folder_path_abs!=root) { free(parent_folder_path_abs); }
+	// closedir(root_dir);
+
 	return 0;
 }
 
 int main()
 {
 	stdio_init_all();
-
+#define WAIT_ON_FIRST_INPUT 1
+#ifdef WAIT_ON_FIRST_INPUT
+	char buf[512];
+	for(;;)
+	{
+		char c = fgetc(stdin);
+		if(c) { break; }
+	}
+#endif
+	// for(;;) {
+	DEBUG_PRINT("Program started\n");
+	DEBUG_PRINT_ERR("MESSAGE ERROR TEST\n");
+	// }
 	// Initialize SD card detection pin
 	gpio_init(SD_DET_PIN);
 	gpio_set_dir(SD_DET_PIN, GPIO_IN);
@@ -314,6 +354,7 @@ int main()
 		give_settle_time = true;
 		tight_loop_contents();
 	}
+	DEBUG_PRINT("SD card present, continuing...\n");
 	set_status_message("SD card found! | Initing file system...");
 	if(give_settle_time) { sleep_ms(1300); } // Give the user time to properly set the SD card into the slot.
 
@@ -334,7 +375,12 @@ int main()
 	}
 	set_status_message("Creating splitter menu...");
 
-	setup_entry_structure(0, root_dir, root, max_depth);
+	if( setup_entry_structure(0, root_dir, root, max_depth) < 0)
+	{
+		set_status_message("Error: failed to recover entries");
+		sleep_ms(850);
+		watchdog_reboot(0, 0, 0);
+	}
 	set_status_message("Created splitter menu!");
 
 	closedir(root_dir);

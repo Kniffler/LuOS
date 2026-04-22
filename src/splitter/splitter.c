@@ -11,6 +11,8 @@
 #include <sys/unistd.h>
 #include <pico/malloc.h>
 
+#include "src/include/debug.h"
+
 #define USE_DEAL_VOID_P 1
 // #define DEAL_FREE_DATA() (free(node->data.value_p)) // This is a surprise tool that'll help us later!
 #include "DEAL.h"
@@ -74,7 +76,7 @@ static deal_t created_entries;
 // Functions
 static void free_all_entries(deal_t *src)
 {
-	if(!src) { return; }
+	if(!src) { DEBUG_PRINT_ERR("Tried to use free_all_entries with NULL pointer\n"); return; }
 	for(size_t i = 0; i < deal_get_length(src); i++)
 	{
 		entry_t *subject = (entry_t*)deal_get(src, i);
@@ -92,10 +94,12 @@ static void free_all_entries(deal_t *src)
 
 void splitter_free_everything()
 {
+	DEBUG_PRINT("Freeing everything\n");
 	free((char*)empty_entry_name);
 	free(edit_print);
 	free(last_msg);
 	free_all_entries(&root_entries);
+	DEBUG_PRINT("DONE\n");
 }
 
 static int min(int a, int b) { return (a>b) ? b : a; }
@@ -105,13 +109,15 @@ static void clean_string(char *msg, size_t size_limit)
 {
 	for(int i = 0; i < strlen(msg); i++)
 	{
-		if(i >= size_limit) { msg[i] = '\0'; }
+		if(i >= size_limit) { msg[i] = '\0'; break; }
 		switch(msg[i])
 		{
 			case '\n':
 			case '\v':
 			case '\f':
 			case '\r':
+			case '\xDB':
+				// if(msg[i]<32) {  }
 				for(int k = i; k < strlen(msg); k++)
 				{
 					if(!msg[k+1]) { break; }
@@ -123,10 +129,11 @@ static void clean_string(char *msg, size_t size_limit)
 	}
 }
 
-void set_status_message(volatile char *to)
+void set_status_message(char *to)
 {
 	if(in_setting_editor || strcmp(last_msg, (char*)to)==0) { return; }
 
+	DEBUG_PRINT("Setting status message to \"%s\"\n", to);
 	int16_t temp_x = lcdc1_get_current_x(rID);
 	int16_t temp_y = lcdc1_get_current_y(rID);
 
@@ -147,26 +154,32 @@ void set_status_message(volatile char *to)
 	lcdc1_region_set_current(rID, temp_x, temp_y);
 
 	strncpy(last_msg, (char*)to, name_limit);
+	DEBUG_PRINT("DONE\n");
 }
 
 extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, entry_value_t value)
 {
-	if(!name) { return -1; }
+	if(!name) { DEBUG_PRINT_ERR("Tried to create entry without name\n"); return -1; }
 
 	entry_t *new_entry = calloc(1, sizeof(entry_t));
 	if(!new_entry) { return -2; }
 
 	new_entry->name = calloc(strlen(name), sizeof(char));
-	if(!new_entry->name) { return -3; }
+	if(!new_entry->name) { DEBUG_PRINT_ERR("Unable to allocate new entry name\n"); return -3; }
 
-	strcpy((char*)new_entry->name, name);
+	strcpy(new_entry->name, name);
+
+	if(strlen(new_entry->name)>max_entry_name_length)
+	{
+		new_entry->name[max_entry_name_length] = '\0';
+		new_entry->name = realloc(new_entry->name, sizeof(char)*max_entry_name_length);
+		if(!new_entry->name) { DEBUG_PRINT_ERR("Unable to reallocate new entry name\n"); return -4; }
+	}
+
+	new_entry->name[strlen(new_entry->name)] = '\0';
+
 	new_entry->type = type;
 	new_entry->exits = exits;
-
-	if(!value.p)
-	{
-		value.p = calloc(1, sizeof(deal_t));
-	}
 	new_entry->value = value;
 
 	deal_add(&created_entries, (void*)new_entry);
@@ -177,7 +190,7 @@ extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, ent
 extern void delete_entry_by_ID(int ID)
 {
 	entry_t *entry = deal_get(&created_entries, ID-1);
-	if(!entry) { return; }
+	if(!entry) { DEBUG_PRINT_ERR("Unable to delete invalid entry\n"); return; }
 	if(entry->type==BRANCH && entry->value.p)
 	{
 		free_all_entries((deal_t*)entry->value.p);
@@ -188,7 +201,7 @@ extern void delete_entry_by_ID(int ID)
 extern void set_entry_function(int entryID, void(*func)(void))
 {
 	entry_t *entry = deal_get(&created_entries, entryID-1);
-	if(!entry) { return; }
+	if(!entry) { DEBUG_PRINT_ERR("Unable to set_entry_function due to invalid index\n"); return; }
 	entry->value.action = func;
 	return;
 }
@@ -197,7 +210,7 @@ extern bool append_entry_to_root(int entryID)
 {
 	if(entryID<=0) { return false; }
 	entry_t *entry = deal_get(&created_entries, entryID-1);
-	if(!entry) { return false; }
+	if(!entry) { DEBUG_PRINT_ERR("Unable to append invalid entry to root\n"); return false; }
 	deal_add(&root_entries, (void*)entry);
 	return true;
 }
@@ -209,8 +222,12 @@ extern bool append_entry_to_branch(int parentID, int childID)
 
 	if(parentID==0) { return append_entry_to_root(childID); }
 
-	if(!parent || !child || parentID == childID) { return false; }
-	if(parent->type != BRANCH) { return false; }
+	if(!parent || !child || parentID == childID)
+	{
+		DEBUG_PRINT_ERR("Invalid indecies passed to function append_entry_to_branch, %d (parent) and %d (child)\n", parentID, childID);
+		return false;
+	}
+	if(parent->type != BRANCH) { DEBUG_PRINT_ERR("Unable to append to non-branch entry\n"); return false; }
 
 	deal_add((deal_t*)parent->value.p, (void*)child);
 	return true;
@@ -233,7 +250,7 @@ entry_t* get_currently_selected_entry()
 void execute_on_branches(int parentID, void(*func)(entry_t*))
 {
 	entry_t *entry = deal_get(&created_entries, parentID-1);
-	if(entry->type!=BRANCH || !entry->value.p) { return; }
+	if(entry->type!=BRANCH || !entry->value.p) { DEBUG_PRINT_ERR("Invalid to execute function on non-compatible entry\n"); return; }
 	for(size_t i = 0; i < deal_get_length((deal_t*)entry->value.p); i++)
 	{
 		entry_t *current = deal_get((deal_t*)entry->value.p, i);
@@ -299,45 +316,50 @@ static void open_editor(entry_t *to_edit)
 	}
 }
 
+static inline void draw_middle_line_segment(int from_top_index)
+{
+	if(from_top_index<0) { DEBUG_PRINT_ERR("Invalid index, used %d\n", from_top_index); return; }
+
+	int16_t temp_x = lcdc1_get_current_x(rID);
+	int16_t temp_y = lcdc1_get_current_y(rID);
+
+	lcdc1_region_set_current(rID, right_side_offset-divider_width, from_top_index*mainFont[1]);
+
+	if(divider_width<mainFont[0])
+	{
+		// We, most literally, draw a line here. \xDB maps to character 219, which maps to a fully filled bitmap.
+		lcdc1_putc(rID, (from_top_index==selector_y) ? '\xCD' : '\xDB'); // ASCII(219)
+		// If the selector is currently on our height: \xCD (thick line)
+
+		lcdc1_region_set_current(rID, right_side_offset, from_top_index*mainFont[1]);
+		lcdc1_putc(rID, ' '); // The space then clears any overflow.
+
+	}else if (from_top_index!=selector_y) {lcdc1_putc(rID, '\xBA'); }
+	// Alternative options, in case we have a perfect 1 character space to play with:
+	// 254 FE
+	// 186 BA <-
+	// 179 B3
+
+	else
+	{
+		if((get_currently_selected_entry())->type==BRANCH) { lcdc1_putc(rID, (selector_on_right) ? '\xF2' : '\xF3'); }
+		else { lcdc1_putc(rID, (selector_on_right) ? '>' : '<'); }
+	}
+
+	lcdc1_region_set_current(rID, temp_x, temp_y);
+}
 static void draw_middle_line()
 {
-	// We, most literally, draw a line here. \xDB maps to character 219, which maps to a fully filled bitmap.
-	// \xCD basically just maps to a pipe that shows us at what height the selector is.
-	// The space then clears any overflow.
-	// lcdc1_region_set_current(rID, right_side_offset-divider_width, 0);
-
-	uint16_t lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
-	deal_t *relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
-	entry_t *selected_entry = (entry_t*)deal_get(relative_side, lower_index_limit+selector_y);
-
+	DEBUG_PRINT("Drawing middle line\n");
+	lcdc1_reset_coords(rID);
 	for(int i = 0; i < max_entries_to_show; i++)
 	{
-		lcdc1_region_set_current(rID, right_side_offset-divider_width, i*mainFont[1]);
-
-		if(divider_width<8)
-		{
-			lcdc1_putc(rID, (i==selector_y) ? '\xCD' : '\xDB'); // ASCII(219)
-			lcdc1_region_set_current(rID, right_side_offset, i*mainFont[1]);
-			lcdc1_putc(rID, ' ');
-
-		}else if (i!=selector_y) { lcdc1_putc(rID, '\xBA'); }
-		// Alternative options, in case we have a perfect 1 character space to play with:
-		// 254 FE
-		// 186 BA <-
-		// 179 B3
-
-		// If the selector is currently on our height: \xCD
-		else
-		{
-			if(selected_entry->type==BRANCH) { lcdc1_putc(rID, (selector_on_right) ? '\xF2' : '\xF3'); }
-			else { lcdc1_putc(rID, (selector_on_right) ? '>' : '<'); }
-		}
-
+		draw_middle_line_segment(i);
 	}
-	lcdc1_reset_coords(rID);
+	DEBUG_PRINT("DONE\n");
 }
 
-static void advance_print_y(bool on_left_side) { lcdc1_region_set_current(rID, lcdc1_get_current_x(rID), lcdc1_get_current_y(rID)+mainFont[1]); }
+static inline void advance_print_y(bool on_left_side) { lcdc1_region_set_current(rID, lcdc1_get_current_x(rID), lcdc1_get_current_y(rID)+mainFont[1]); }
 
 static void print_and_cut_entry_name(volatile char *entry_name, bool is_on_right, bool highlight)
 {
@@ -379,20 +401,24 @@ static void index_limits_bounds_check()
 static void set_entry_name(uint16_t from_top_index, bool on_left_side, volatile char* to)
 {
 	lcdc1_region_set_current(rID, (on_left_side) ? 0 : right_side_offset, from_top_index*mainFont[1]);
-	lcdc1_print_string(rID, to);
+	lcdc1_print_string(rID, (char*)to);
 }
 static void clear_respective_list(bool on_left_side)
 {
-	for(uint16_t i = 0; i < max_entries_to_show; i++)
+	for(size_t i = 0; i < max_entries_to_show; i++)
 	{
 		set_entry_name(i, on_left_side, empty_entry_name);
+		// if(on_left_side) { draw_middle_line_segment(i); }
 	}
 	lcdc1_reset_coords(rID);
 }
 
 static void print_all_entries_on_side(deal_t* root, bool on_left_side)
 {
+	static volatile entry_t *entry;
+
 	if(!root) { return; }
+
 	clear_respective_list(on_left_side);
 	index_limits_bounds_check();
 	int32_t upper_index_limit = (!on_left_side) ? right_indexing_limit_upper : left_indexing_limit_upper;
@@ -400,8 +426,12 @@ static void print_all_entries_on_side(deal_t* root, bool on_left_side)
 
 	for(int16_t i = lower_index_limit; i < upper_index_limit; i++)
 	{
-		volatile entry_t *entry = (entry_t*)deal_get(root, i);
-		if(!entry) { print_and_cut_entry_name("--Null entry--", !on_left_side, selector_y+lower_index_limit==i); continue; }
+		entry = (entry_t*)deal_get(root, i);
+		if(!entry || !entry->name)
+		{
+			print_and_cut_entry_name("--Null entry--", !on_left_side, selector_y+lower_index_limit==i);
+			continue;
+		}
 		print_and_cut_entry_name(entry->name, !on_left_side, selector_y+lower_index_limit==i && selector_on_right!=on_left_side );
 		advance_print_y(on_left_side);
 	}
@@ -692,7 +722,7 @@ evaluate_key:
 						{
 							if(msg) { free(msg); }
 							splitter_free_everything();
-						};
+						}
 						selected_entry->value.action();
 					break;
 					case SETTING: break;
@@ -720,7 +750,7 @@ evaluate_key:
 		selected_entry = (entry_t*)deal_get(relative_side, lower_index_limit+selector_y);
 
 		snprintf(buf, sizeof(buf), "sel_Y|depth|on_right  %d | %d | %d", selector_y, current_depth, selector_on_right);
-		set_status_message(buf);
+		// set_status_message(buf);
 
 		// Fancy stuff
 		if(selected_entry && selected_entry->type==BRANCH && !selector_on_right
@@ -750,15 +780,19 @@ evaluate_key:
 
 uint16_t splitter_init(int rIDgiven, int maxDepth)
 {
+	DEBUG_PRINT("INITED STARTED\n");
 	if(lcd_get_region_height(rIDgiven)<mainFont[1]*2 || lcd_get_region_width(rIDgiven)<(mainFont[0]*3)+1)
-	{ return 0; }
+	{ DEBUG_PRINT_ERR("Given area does not meet minimum criteria\n"); return 0; }
 
+	DEBUG_PRINT("Enabling score1\n");
 	enable_core1_lcdspi();
 
+	DEBUG_PRINT("Setting region settings ");
 	lcd_region_set_asthetics(rIDgiven, ORANGE, BLACK, 1, SHIFT_DOWNWARDS, (unsigned char *)LuOS_System_Font_data);
 	lcdc1_region_clear(rIDgiven);
 	rID = rIDgiven;
 
+	DEBUG_PRINT("DONE | Calculating character offsets\n");
 	divider_width = (int) (lcdc1_get_region_width(rIDgiven)%mainFont[0]);
 	divider_width = (int)( (divider_width==0) ? mainFont[0] : divider_width );
 
@@ -771,20 +805,39 @@ uint16_t splitter_init(int rIDgiven, int maxDepth)
 	max_entry_depth = (maxDepth>0) ? maxDepth : 2;
 	message_y_start = (max_entries_to_show*mainFont[1]);
 
-	empty_entry_name = calloc(max_entry_name_length+1, sizeof(char));
+	DEBUG_PRINT("DONE | Setting empty entry\n");
+	empty_entry_name = calloc(max_entry_name_length+2, sizeof(char));
+	if(!empty_entry_name)
+	{
+		DEBUG_PRINT_ERR("Empty entry was not allocated - aborting\n");
+		return 0;
+	}
 	memset((char*)empty_entry_name, ' ', max_entry_name_length);
 	empty_entry_name[max_entry_name_length] = '\0';
-	clean_string((char*)empty_entry_name, max_entry_name_length);
+	// clean_string((char*)empty_entry_name, max_entry_name_length);
 
+	DEBUG_PRINT("DONE | Allocating misc. string buffers\n");
 	edit_print = calloc(lcd_get_region_width(rID)/mainFont[0], sizeof(char));
 	last_msg = calloc(lcd_get_region_width(rID)/mainFont[0], sizeof(char));
+	if(!edit_print)
+	{
+		DEBUG_PRINT_ERR("edit_print was not allocated - aborting\n");
+		return 0;
+	}
+	if(!last_msg)
+	{
+		DEBUG_PRINT_ERR("last_msg was not allocated - aborting\n");
+		return 0;
+	}
 
 	inited = 1;
+	DEBUG_PRINT("DONE | Initing i2ckbd\n");
 	init_i2c_kbd();
 
-	draw_middle_line();
-	set_status_message("Splitter Inited\0");
+	DEBUG_PRINT("DONE | Displaying first pixels\n");
 
+	set_status_message("Splitter Inited\0");
+	DEBUG_PRINT("INITED DONE\n");
 	return ((uint16_t)max_entry_name_length<<8)|(uint16_t)max_entries_to_show;
 }
 
@@ -792,7 +845,8 @@ static void w_reboot_wrap(void) { watchdog_reboot(0, 0, 0); return; }
 
 void splitter_start(void)
 {
-	if(!inited) { return; }
+	DEBUG_PRINT("Starting splitter");
+	if(!inited) { DEBUG_PRINT_ERR("Attempted to start splitter without initialization\n"); return; }
 
 	// Some code I used to test/debug this whole library
 
@@ -810,13 +864,13 @@ void splitter_start(void)
 	// static entry_t e4 = {"e4_entry", LEAF}; deal_add(&root_entries, (void*)&e4);
  //
 
-	if(!root_entries.data) { return; }
+	if(!root_entries.data) { DEBUG_PRINT_ERR("Splitter started without any entries, returning from function\n"); return; }
 	// If no first entry exists, we don't start anything.
 
 	shown_entries_left = &root_entries;
 	entry_t *first_selected = deal_get(&root_entries, 0);
 
-	if(!first_selected) { return; }
+	if(!first_selected) { DEBUG_PRINT_ERR("First entry in root_entries does not exist, returning from function\n"); return; }
 	if(first_selected->type==BRANCH)
 	{
 		shown_entries_right = (deal_t*) ( (entry_t*)deal_get(&root_entries, 0) )->value.p;
@@ -827,9 +881,12 @@ void splitter_start(void)
 	print_all_entries_on_side(shown_entries_left, true);
 	print_all_entries_on_side(shown_entries_right, false);
 	draw_middle_line();
+
+	DEBUG_PRINT("Splitter started, launching keyboard task\n");
 	kbd_task();
 
 	// This point should not be reached.
+	DEBUG_PRINT_ERR("Keyboard task returned - rebooting\n");
 	splitter_free_everything();
 	watchdog_reboot(0, 0, 0);
 }

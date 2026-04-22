@@ -1,6 +1,8 @@
 #ifndef __LCDSPI_CORE1_WRAP__
 #define __LCDSPI_CORE1_WRAP__
 
+#include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include "lcdspi.h"
 #include <pico/multicore.h>
@@ -28,6 +30,7 @@ static inline void stall_until_fifo_Wready() { while(!multicore_fifo_wready()) {
 static inline void stall_until_fifo_Rvalid() { while(!multicore_fifo_rvalid()) { tight_loop_contents(); } }
 
 static volatile bool handshakeComplete = 0;
+static volatile char* pass_string;
 
 static void fifo_send_uint64(uint64_t data)
 {
@@ -49,13 +52,18 @@ static void core1_lcd_receiver(void)
 	handshakeComplete = 1;
 	static uint32_t cmd = 0;
 	static int32_t rID = 0;
+	// static char *str;
 	for(;;) {
 		stall_until_fifo_Rvalid();
 		cmd = multicore_fifo_pop_blocking();
 		rID = (int32_t)multicore_fifo_pop_blocking();
 		switch(cmd)
 		{
-			case CMD_PRINT_STRING: lcd_print_string(rID, (char*)fifo_receive_uint64()); break;
+			case CMD_PRINT_STRING:
+				// str = (char*)fifo_receive_uint64();
+				lcd_print_string(rID, (char*)fifo_receive_uint64());
+				// free((char*)pass_string);
+				break;
 			case CMD_PRINT_CHAR: lcd_putc(rID, 0, (char)(multicore_fifo_pop_blocking()&UINT8_MAX)); break;
 			case CMD_SET_CURRENT_XY: lcd_region_set_current(rID, multicore_fifo_pop_blocking(), multicore_fifo_pop_blocking()); break;
 			case CMD_RESET_CURRENT_XY: lcd_reset_coords(rID); break;
@@ -75,8 +83,10 @@ extern void enable_core1_lcdspi()
 	while(!handshakeComplete) { tight_loop_contents(); } // Allow for the core to lauch
 }
 
-extern void lcdc1_print_string(int32_t rID, volatile char* str)
+extern void lcdc1_print_string(int32_t rID, char* str)
 {
+	// pass_string = malloc(sizeof(char)*(strlen(str))+1);
+	// strcpy((char*)pass_string, str);
 	stall_until_fifo_Wready();
 	multicore_fifo_push_blocking( (uint32_t)(CMD_PRINT_STRING) );
 	multicore_fifo_push_blocking( (uint32_t)(rID) );
