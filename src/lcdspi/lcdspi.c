@@ -414,6 +414,7 @@ void display_put_c(int rID, char c) {
 
 	// handle the standard control chars
 	switch (c) {
+		case '\0': return;
 		case '\b':
 			regions[rID].current_x -= regions[rID].font[0];
 			//if (CURRENT_X < 0) CURRENT_X = 0;
@@ -466,8 +467,9 @@ char lcd_put_char(int rID, char c, int flush) {
 
 void lcd_print_string(int rID, char *s) {
 	while (*s) {
-		if (s[1])lcd_put_char(rID, *s, 0);
+		if (s[1]) lcd_put_char(rID, *s, 0);
 		else lcd_put_char(rID, *s, 1);
+		// if ()
 		s++;
 	}
 	fflush(stdout);

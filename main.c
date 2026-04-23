@@ -255,11 +255,22 @@ void final_selection_callback(const char *path)
 
 	load_and_launch_firmware_by_path(path);
 }
+void gather_path_and_flash(void)
+{
+	char *received_path = get_past_entries_filepath_style(1024);
+	char *base_path = calloc(1024, sizeof(char));
+	strcpy(base_path, root);
+	strcpy(base_path, received_path);
+	free(received_path);
+	DEBUG_PRINT("Flashing file %s\n", base_path);
+	final_selection_callback(base_path);
+	DEBUG_PRINT_ERR("Final selection failed\n");
+}
 
 int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_abs, int depth)
 {
 	// set_status_message("We in da function!");
-	if(depth<=0) { return -1; }
+	if(depth<0) { return -1; }
 	char msg[128];
 	struct dirent *ent;
 	while((ent = readdir(root_dir))!=NULL)
@@ -275,9 +286,9 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 			potential_value.p = calloc(1, sizeof(entry_value_t));
 		}else
 		{
-			potential_value.action = NULL;
+			potential_value.action = gather_path_and_flash;
 		}
-
+		ent->d_name[strlen(ent->d_name)] = '\0';
 		int ID = create_entry_return_ID(ent->d_name, (is_dir) ? BRANCH : FUNCTIONABLE, 0, potential_value);
 		if(ID<1)
 		{
@@ -289,15 +300,17 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 
 		if(is_dir)
 		{
-			DEBUG_PRINT("Directory found, creating children...\n");
+			DEBUG_PRINT("%s is a directory | Creating children\n", ent->d_name);
 			// snprintf(msg, sizeof(msg), "New entry \"%s\" is a dir", ent->d_name);
 			// set_status_message(msg);
 
-			char *new_path = calloc(strlen(parent_folder_path_abs)+strlen(ent->d_name)+1, sizeof(char));
+			char *new_path = calloc(strlen(parent_folder_path_abs)+strlen(ent->d_name)+5, sizeof(char));
 			if(!new_path) { set_status_message("Error: failed to allocate entry name"); return -3; }
 			strcpy(new_path, parent_folder_path_abs);
 			strcat(new_path, "/");
 			strcat(new_path, ent->d_name);
+
+			// strcat(new_path, "\0");
 
 			// sleep_ms(300);
 			// snprintf(msg, sizeof(msg), "New path: %s", new_path);
@@ -321,7 +334,6 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 int main()
 {
 	stdio_init_all();
-#define WAIT_ON_FIRST_INPUT 1
 #ifdef WAIT_ON_FIRST_INPUT
 	char buf[512];
 	for(;;)

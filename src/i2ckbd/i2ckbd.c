@@ -2,6 +2,9 @@
 #include <pico/stdio.h>
 #include "i2ckbd.h"
 
+#define USE_DEBUG 1
+#include "src/include/debug.h"
+
 static uint8_t i2c_inited = 0;
 
 void init_i2c_kbd() {
@@ -26,14 +29,14 @@ int read_i2c_kbd() {
 
 	retval = i2c_write_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, msg, 1, false, 500000);
 	if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) {
-		// printf("read_i2c_kbd i2c write error\n");
+		DEBUG_PRINT_ERR("read_i2c_kbd i2c write error\n");
 		return -1;
 	}
 
 	sleep_ms(16);
 	retval = i2c_read_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, (unsigned char *) &buff, 2, false, 500000);
 	if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) {
-		// printf("read_i2c_kbd i2c read error read\n");
+		DEBUG_PRINT_ERR("read_i2c_kbd i2c read error read\n");
 		return -1;
 	}
 
@@ -67,13 +70,13 @@ int read_battery() {
 
 	retval = i2c_write_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, msg, 1, false, 500000);
 	if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) {
-		printf("read_battery i2c write error\n");
+		DEBUG_PRINT_ERR("read_battery i2c write error\n");
 		return -1;
 	}
 	sleep_ms(16);
 	retval = i2c_read_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, (unsigned char *) &buff, 2, false, 500000);
 	if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) {
-		printf("read_battery i2c read error read\n");
+		DEBUG_PRINT_ERR("read_battery i2c read error read\n");
 		return -1;
 	}
 

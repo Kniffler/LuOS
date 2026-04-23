@@ -8,6 +8,8 @@
 #include <pico/multicore.h>
 #include <pico/time.h>
 
+#include "src/include/debug.h"
+
 #define CMD_PRINT_STRING		1
 #define CMD_PRINT_CHAR			2
 #define CMD_GET_CURRENT_X		3
@@ -30,7 +32,6 @@ static inline void stall_until_fifo_Wready() { while(!multicore_fifo_wready()) {
 static inline void stall_until_fifo_Rvalid() { while(!multicore_fifo_rvalid()) { tight_loop_contents(); } }
 
 static volatile bool handshakeComplete = 0;
-static volatile char* pass_string;
 
 static void fifo_send_uint64(uint64_t data)
 {
@@ -50,9 +51,10 @@ static uint64_t fifo_receive_uint64(void)
 static void core1_lcd_receiver(void)
 {
 	handshakeComplete = 1;
+	DEBUG_PRINT("Handshake concluded | Starting FIFO read loop\n");
 	static uint32_t cmd = 0;
 	static int32_t rID = 0;
-	// static char *str;
+	static char *str;
 	for(;;) {
 		stall_until_fifo_Rvalid();
 		cmd = multicore_fifo_pop_blocking();
@@ -60,10 +62,12 @@ static void core1_lcd_receiver(void)
 		switch(cmd)
 		{
 			case CMD_PRINT_STRING:
-				// str = (char*)fifo_receive_uint64();
-				lcd_print_string(rID, (char*)fifo_receive_uint64());
-				// free((char*)pass_string);
-				break;
+				str = (char*)fifo_receive_uint64();
+				DEBUG_ASSERT(str);
+				lcd_print_string(rID, (char*)str);
+				free((char*)str);
+				str = NULL;
+			break;
 			case CMD_PRINT_CHAR: lcd_putc(rID, 0, (char)(multicore_fifo_pop_blocking()&UINT8_MAX)); break;
 			case CMD_SET_CURRENT_XY: lcd_region_set_current(rID, multicore_fifo_pop_blocking(), multicore_fifo_pop_blocking()); break;
 			case CMD_RESET_CURRENT_XY: lcd_reset_coords(rID); break;
@@ -85,15 +89,17 @@ extern void enable_core1_lcdspi()
 
 extern void lcdc1_print_string(int32_t rID, char* str)
 {
-	// pass_string = malloc(sizeof(char)*(strlen(str))+1);
-	// strcpy((char*)pass_string, str);
+	char *send = malloc(sizeof(char)*(strlen(str)+1));
+	DEBUG_ASSERT(send && str);
+	strcpy(send, str);
+
 	stall_until_fifo_Wready();
 	multicore_fifo_push_blocking( (uint32_t)(CMD_PRINT_STRING) );
 	multicore_fifo_push_blocking( (uint32_t)(rID) );
 
-	fifo_send_uint64((uint64_t)str);
+	fifo_send_uint64((uint64_t)send);
 }
-extern void lcdc1_putc(int32_t rID, volatile char c)
+extern void lcdc1_putc(int32_t rID, char c)
 {
 	stall_until_fifo_Wready();
 	multicore_fifo_push_blocking( (uint32_t)(CMD_PRINT_CHAR) );

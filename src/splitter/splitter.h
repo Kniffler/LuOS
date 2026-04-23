@@ -53,7 +53,7 @@ extern bool append_entry_to_branch(int parentID, int childID);
 extern entry_t* get_entry_by_ID(int ID);
 extern entry_t* get_currently_selected_entry();
 extern void execute_on_branches(int parentID, void(*func)(entry_t*));
-extern char* get_past_entries_filepath_style();
+extern char* get_past_entries_filepath_style(size_t charsToAllocate);
 
 // extern bool finalize_entry_structure();
 

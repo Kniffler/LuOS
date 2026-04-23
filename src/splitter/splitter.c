@@ -20,19 +20,19 @@
 #include "keyboard_define.h"
 #include "lcdspi_core1_wrap.h"
 
-#define CENTER_EACH_ENTRY 1
-
 // Misc.
 static int rID;
 
 const unsigned char *mainFont = (unsigned char*)LuOS_System_Font_data;
+// When changing this, please modify the draw_middle_line_segment function according to your specified font
+
 static bool inited = 0;
 
 // Display variables
 static uint8_t max_entry_name_length = 0;
 static uint8_t max_entries_to_show = 0;
 static uint8_t max_entry_depth = 0;
-volatile char *empty_entry_name;
+static char *empty_entry_name;
 
 static uint16_t right_side_offset = 0;
 static uint8_t divider_width = 0;
@@ -102,8 +102,8 @@ void splitter_free_everything()
 	DEBUG_PRINT("DONE\n");
 }
 
-static int min(int a, int b) { return (a>b) ? b : a; }
-static int max(int a, int b) { return (a>b) ? a : b; }
+static inline int min(int a, int b) { return (a>b) ? b : a; }
+static inline int max(int a, int b) { return (a>b) ? a : b; }
 
 static void clean_string(char *msg, size_t size_limit)
 {
@@ -131,30 +131,30 @@ static void clean_string(char *msg, size_t size_limit)
 
 void set_status_message(char *to)
 {
-	if(in_setting_editor || strcmp(last_msg, (char*)to)==0) { return; }
-
+	if(in_setting_editor || strcmp(last_msg, to)==0) { return; }
 	DEBUG_PRINT("Setting status message to \"%s\"\n", to);
+
 	int16_t temp_x = lcdc1_get_current_x(rID);
 	int16_t temp_y = lcdc1_get_current_y(rID);
 
-	lcdc1_region_set_current(rID, 0, message_y_start);
 
 	int16_t name_limit = lcdc1_get_region_width(rID)/mainFont[0];
 	name_limit = (name_limit>1) ? name_limit : 3;
 
-	clean_string((char*)to, name_limit);
+	clean_string(to, name_limit);
 
+	lcdc1_region_set_current(rID, 0, message_y_start);
 	for(uint8_t i = 0; i < name_limit; i++)
 	{
 		lcdc1_putc(rID, ' ');
 	}
+
 	lcdc1_region_set_current(rID, 0, message_y_start);
 	lcdc1_print_string(rID, to);
 
 	lcdc1_region_set_current(rID, temp_x, temp_y);
 
-	strncpy(last_msg, (char*)to, name_limit);
-	DEBUG_PRINT("DONE\n");
+	strncpy(last_msg, to, name_limit);
 }
 
 extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, entry_value_t value)
@@ -164,18 +164,17 @@ extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, ent
 	entry_t *new_entry = calloc(1, sizeof(entry_t));
 	if(!new_entry) { return -2; }
 
-	new_entry->name = calloc(strlen(name), sizeof(char));
+	new_entry->name = calloc(strlen(name)+1, sizeof(char));
 	if(!new_entry->name) { DEBUG_PRINT_ERR("Unable to allocate new entry name\n"); return -3; }
 
 	strcpy(new_entry->name, name);
 
-	if(strlen(new_entry->name)>max_entry_name_length)
-	{
-		new_entry->name[max_entry_name_length] = '\0';
-		new_entry->name = realloc(new_entry->name, sizeof(char)*max_entry_name_length);
-		if(!new_entry->name) { DEBUG_PRINT_ERR("Unable to reallocate new entry name\n"); return -4; }
-	}
-
+	// if(strlen(new_entry->name)>max_entry_name_length)
+	// {
+	// 	new_entry->name[max_entry_name_length] = '\0';
+	// 	new_entry->name = realloc(new_entry->name, sizeof(char)*(max_entry_name_length));
+	// 	if(!new_entry->name) { DEBUG_PRINT_ERR("Unable to reallocate new entry name\n"); return -4; }
+	// }
 	new_entry->name[strlen(new_entry->name)] = '\0';
 
 	new_entry->type = type;
@@ -184,7 +183,9 @@ extern int create_entry_return_ID(char *name, entry_type_t type, bool exits, ent
 
 	deal_add(&created_entries, (void*)new_entry);
 
-	return deal_get_length(&created_entries);
+	int ID = deal_get_length(&created_entries);
+	DEBUG_PRINT("Created entry \"%s\" ID #%d\n", new_entry->name, ID);
+	return ID;
 }
 
 extern void delete_entry_by_ID(int ID)
@@ -258,21 +259,17 @@ void execute_on_branches(int parentID, void(*func)(entry_t*))
 	}
 }
 
-extern char* get_past_entries_filepath_style()
+extern char* get_past_entries_filepath_style(size_t charsToAllocate)
 {
 	size_t len = deal_get_length(&entry_path);
-	char *out = calloc((len*max_entry_name_length) + len, sizeof(char));
-	// out[0] = '\0';
+	char *out = calloc(charsToAllocate, sizeof(char));
+
 	size_t write_index = 0;
 	for(size_t i = 0; i < len; i++)
 	{
 		entry_t *entry = (entry_t*)deal_get(&entry_path, i);
-		// if(i==0) {
-		// 	strncpy(out, entry->name, strlen(entry->name));
-		// }else {
-			strcat(out, "/");
-			strcat(out, (char*)entry->name);
-		// }
+		strcat(out, "/");
+		strcat(out, (char*)entry->name);
 	}
 	return out;
 }
@@ -350,40 +347,32 @@ static inline void draw_middle_line_segment(int from_top_index)
 }
 static void draw_middle_line()
 {
-	DEBUG_PRINT("Drawing middle line\n");
+	DEBUG_PRINT("Started\n");
 	lcdc1_reset_coords(rID);
 	for(int i = 0; i < max_entries_to_show; i++)
 	{
 		draw_middle_line_segment(i);
 	}
-	DEBUG_PRINT("DONE\n");
 }
 
 static inline void advance_print_y(bool on_left_side) { lcdc1_region_set_current(rID, lcdc1_get_current_x(rID), lcdc1_get_current_y(rID)+mainFont[1]); }
 
-static void print_and_cut_entry_name(volatile char *entry_name, bool is_on_right, bool highlight)
+static void print_and_cut_entry_name(char *entry_name, bool is_on_right, bool highlight)
 {
 	if(!entry_name) { return; }
 
-	// if(strlen(entry_name)<=max_entry_name_length)
-	// {
-	// 	if(highlight) { lcdc1_putc(rID, '\017'); }
-	// 	lcdc1_print_string(rID, entry_name);
-	// 	if(highlight) { lcdc1_putc(rID, '\016'); }
- //
-	// 	return;
-	// }
-
 	char limited_name[max_entry_name_length+1];
-	strncpy(limited_name, (const char*)entry_name, max_entry_name_length);
+	strncpy(limited_name, entry_name, max_entry_name_length);
 	limited_name[max_entry_name_length] = '\0';
-	#ifndef CENTER_EACH_ENTRY
-	lcdc1_region_set_current(rID, (isOnRight) ? right_side_offset : 0, lcdc1_get_current_y(rID));
+
+	#ifndef SPLITTER_CENTER_EACH_ENTRY
+	lcdc1_region_set_current(rID, (is_on_right) ? right_side_offset : 0, lcdc1_get_current_y(rID));
 	#else
 	lcdc1_region_set_current(rID,
-			((is_on_right) ? right_side_offset : 0) + ( ((right_side_offset-divider_width) - strlen(limited_name)*mainFont[0])/2 ),
+			((is_on_right) ? right_side_offset : 0) + ( ((right_side_offset - divider_width) - strlen((char*)limited_name)*mainFont[0])/2 ),
 			lcdc1_get_current_y(rID));
 	#endif
+
 	if(highlight) { lcdc1_putc(rID, '\017'); } // These highlight characters do not affect the current print coords
 	lcdc1_print_string(rID, limited_name);
 	if(highlight) { lcdc1_putc(rID, '\016'); }
@@ -395,64 +384,10 @@ static void index_limits_bounds_check()
 	left_indexing_limit_lower = max(left_indexing_limit_lower, 0);
 
 	right_indexing_limit_upper = min(right_indexing_limit_lower+max_entries_to_show, deal_get_length(shown_entries_right));
-	left_indexing_limit_upper = min(right_indexing_limit_lower+max_entries_to_show, deal_get_length(shown_entries_left));
-}
+	left_indexing_limit_upper = min(left_indexing_limit_lower+max_entries_to_show, deal_get_length(shown_entries_left));
 
-static void set_entry_name(uint16_t from_top_index, bool on_left_side, volatile char* to)
-{
-	lcdc1_region_set_current(rID, (on_left_side) ? 0 : right_side_offset, from_top_index*mainFont[1]);
-	lcdc1_print_string(rID, (char*)to);
-}
-static void clear_respective_list(bool on_left_side)
-{
-	for(size_t i = 0; i < max_entries_to_show; i++)
-	{
-		set_entry_name(i, on_left_side, empty_entry_name);
-		// if(on_left_side) { draw_middle_line_segment(i); }
-	}
-	lcdc1_reset_coords(rID);
-}
-
-static void print_all_entries_on_side(deal_t* root, bool on_left_side)
-{
-	static volatile entry_t *entry;
-
-	if(!root) { return; }
-
-	clear_respective_list(on_left_side);
-	index_limits_bounds_check();
-	int32_t upper_index_limit = (!on_left_side) ? right_indexing_limit_upper : left_indexing_limit_upper;
-	int32_t lower_index_limit = (!on_left_side) ? right_indexing_limit_lower : left_indexing_limit_lower;
-
-	for(int16_t i = lower_index_limit; i < upper_index_limit; i++)
-	{
-		entry = (entry_t*)deal_get(root, i);
-		if(!entry || !entry->name)
-		{
-			print_and_cut_entry_name("--Null entry--", !on_left_side, selector_y+lower_index_limit==i);
-			continue;
-		}
-		print_and_cut_entry_name(entry->name, !on_left_side, selector_y+lower_index_limit==i && selector_on_right!=on_left_side );
-		advance_print_y(on_left_side);
-	}
-}
-static void rewrite_entry(bool on_left_side, uint16_t index)
-{
-	deal_t *relevant_side = (on_left_side) ? shown_entries_left : shown_entries_right;
-	uint16_t lower_index_limit = (on_left_side) ? left_indexing_limit_lower : right_indexing_limit_lower;
-
-	set_entry_name(index, on_left_side, empty_entry_name);
-	lcdc1_region_set_current(rID, 0, index*mainFont[1]);
-	// X does not interest us here, the print_and_cut_entry_name funtion sets it automatically, but we do have to specify a y value
-
-	volatile char *name_indx = ((entry_t*)deal_get(relevant_side, index+lower_index_limit))->name;
-	print_and_cut_entry_name(name_indx, !on_left_side, (index==selector_y&&on_left_side==!selector_on_right));
-}
-
-static inline void rewrite_2_entries_on_side(bool on_left_side, uint16_t index1, uint16_t index2)
-{
-	rewrite_entry(on_left_side, index1);
-	rewrite_entry(on_left_side, index2);
+	// right_indexing_limit_lower = min(right_indexing_limit_lower, right_indexing_limit_upper);
+	// left_indexing_limit_lower = min(left_indexing_limit_lower, left_indexing_limit_upper);
 }
 
 static inline void sel_y_bounds_check()
@@ -474,15 +409,83 @@ static inline void sel_y_bounds_check()
 	bool below_py = prev_selector_y<0;
 
 	if(above_cy || below_cy)
-		{ selector_y = (below_cy) ? max(0, selector_y) : min(limit_cy-1, selector_y); }
+	{ selector_y = (below_cy) ? max(0, selector_y) : min(limit_cy-1, selector_y); }
 	if(above_py || below_py)
-		{ prev_selector_y = (below_py) ? max(0, prev_selector_y) : min(limit_py-1, prev_selector_y); }
+	{ prev_selector_y = (below_py) ? max(0, prev_selector_y) : min(limit_py-1, prev_selector_y); }
 }
 
-static void move_selector_vertical(int amount)
-{
-	selector_y += amount;
 
+static void set_entry_name(uint16_t from_top_index, bool on_left_side, char* to)
+{
+	lcdc1_region_set_current(rID, (on_left_side) ? 0 : right_side_offset, from_top_index*mainFont[1]);
+	lcdc1_print_string(rID, (char*)to);
+}
+static void clear_respective_list(bool on_left_side)
+{
+	if(!on_left_side) { empty_entry_name[max_entry_name_length] = '\0'; }
+
+	for(size_t i = 0; i < max_entries_to_show; i++)
+	{
+		set_entry_name(i, on_left_side, empty_entry_name);
+		if(on_left_side) { draw_middle_line_segment(i); }
+	}
+	if(!on_left_side) { empty_entry_name[max_entry_name_length] = ' '; }
+
+	lcdc1_reset_coords(rID);
+}
+
+static void print_all_entries_on_side(deal_t* root, bool on_left_side)
+{
+	static volatile entry_t *entry;
+
+	if(!root) { return; }
+
+	clear_respective_list(on_left_side);
+	index_limits_bounds_check();
+	int32_t upper_index_limit = (!on_left_side) ? right_indexing_limit_upper : left_indexing_limit_upper;
+	int32_t lower_index_limit = (!on_left_side) ? right_indexing_limit_lower : left_indexing_limit_lower;
+
+	for(int16_t i = lower_index_limit; i < upper_index_limit; i++)
+	{
+		entry = (entry_t*)deal_get(root, i);
+		if(!entry || !entry->name)
+		{
+			print_and_cut_entry_name("--Null entry--", !on_left_side, selector_y+lower_index_limit==i);
+			DEBUG_PRINT_ERR("Unable to get entry at index %d\n", i);
+			continue;
+		}
+		print_and_cut_entry_name(entry->name, !on_left_side, selector_y+lower_index_limit==i && selector_on_right!=on_left_side );
+		advance_print_y(on_left_side);
+	}
+}
+static void rewrite_entry(bool on_left_side, uint16_t index)
+{
+	static char *name_indx; // Has to be static so the other core can access it
+	deal_t *relevant_side = (on_left_side) ? shown_entries_left : shown_entries_right;
+	uint16_t lower_index_limit = (on_left_side) ? left_indexing_limit_lower : right_indexing_limit_lower;
+
+	if(!on_left_side) { empty_entry_name[max_entry_name_length] = '\0'; }
+	set_entry_name(index, on_left_side, empty_entry_name);
+	if(!on_left_side) { empty_entry_name[max_entry_name_length] = ' '; }
+
+	lcdc1_region_set_current(rID, 0, index*mainFont[1]);
+	// X does not interest us here, the print_and_cut_entry_name funtion sets it automatically, but we do have to specify a y value
+
+	name_indx = ((entry_t*)deal_get(relevant_side, index+lower_index_limit))->name;
+	DEBUG_PRINT("Rewriting entry \"%s\"\n", name_indx);
+	print_and_cut_entry_name(name_indx, !on_left_side, (index==selector_y&&on_left_side==!selector_on_right));
+	if(on_left_side) { draw_middle_line_segment(index); }
+}
+
+static inline void rewrite_2_entries_on_side(bool on_left_side, uint16_t index1, uint16_t index2)
+{
+	if(index1==index2) { return; }
+	rewrite_entry(on_left_side, index1);
+	rewrite_entry(on_left_side, index2);
+}
+
+static void move_selector_vertical_updown(bool up)
+{
 	deal_t *relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
 
 	int32_t lower_index_limit = (selector_on_right) ? right_indexing_limit_lower : left_indexing_limit_lower;
@@ -490,28 +493,37 @@ static void move_selector_vertical(int amount)
 
 	int32_t limit = min(upper_index_limit, max_entries_to_show);
 
-	bool above = selector_y+lower_index_limit>=limit;
-	bool below = selector_y<0;
+	bool threshold_passed_above = (selector_y<=0 && up);
+	bool threshold_passed_below = (selector_y>=limit-1 && !up);
 
-	if((above || below) && !(lower_index_limit+max_entries_to_show>upper_index_limit))
+	bool can_scroll_up = lower_index_limit > 0;
+	bool can_scroll_down = upper_index_limit < deal_get_length(relative_side);
+
+	if(
+		(
+			(threshold_passed_above && can_scroll_up) ||
+			(threshold_passed_below && can_scroll_down)
+		) && !(lower_index_limit+max_entries_to_show > deal_get_length(relative_side))
+	)
 	{
-		if(selector_on_right)
-		{
-			right_indexing_limit_lower += (below) ? -1 : +1;
-			right_indexing_limit_upper += (below) ? -1 : +1;
-			index_limits_bounds_check();
-			sel_y_bounds_check();
-			print_all_entries_on_side(shown_entries_right, false);
-
+		if(selector_on_right) {
+			right_indexing_limit_lower += (threshold_passed_above && can_scroll_up) ? -1 : +1;
+			right_indexing_limit_upper += (threshold_passed_above && can_scroll_up) ? -1 : +1;
 		}else
 		{
-			left_indexing_limit_lower += (below) ? -1 : +1;
-			left_indexing_limit_upper += (below) ? -1 : +1;
-			index_limits_bounds_check();
-			sel_y_bounds_check();
-			print_all_entries_on_side(shown_entries_left, true);
+			left_indexing_limit_lower += (threshold_passed_above && can_scroll_up) ? -1 : +1;
+			left_indexing_limit_upper += (threshold_passed_above && can_scroll_up) ? -1 : +1;
 		}
+		index_limits_bounds_check();
+		sel_y_bounds_check();
+		print_all_entries_on_side(shown_entries_right, !selector_on_right);
 		return;
+	}else if(!threshold_passed_above && up)
+	{
+		selector_y--;
+	}else if(!threshold_passed_below && !up)
+	{
+		selector_y++;
 	}
 	sel_y_bounds_check();
 	rewrite_2_entries_on_side(!selector_on_right, selector_y, prev_selector_y);
@@ -538,12 +550,25 @@ static inline void handle_selector_side_change(deal_t *relative_side, deal_t *re
 	;
 	selector_on_right = !selector_on_right;
 	sel_y_bounds_check();
+
+	// Path tracking
+	if(selector_on_right)
+	{
+		deal_pop_end(&entry_path);
+		deal_add(&entry_path, last_branch);
+		deal_add(&entry_path, get_currently_selected_entry());
+	}else
+	{
+		deal_pop_end(&entry_path);
+		deal_pop_end(&entry_path);
+		deal_add(&entry_path, get_currently_selected_entry());
+	}
 }
 
 
 static bool can_expand_entry_on_right(entry_t *candidate_expander)
 {
-	if(current_depth+1 >= max_entry_depth) { return false; }
+	if(current_depth+1 > max_entry_depth) { return false; }
 	if(!selector_on_right) { return false; } // Since we would only switch sides, not scroll
 
 	if(!candidate_expander) { return false; }
@@ -568,8 +593,6 @@ static void expand_entry_on_right(entry_t *subject)
 	right_indexing_limit_upper = deal_get_length(shown_entries_right);
 
 	index_limits_bounds_check();
-
-	deal_add(&entry_path, get_currently_selected_entry());
 }
 static bool can_return_entry_on_left()
 {
@@ -590,7 +613,7 @@ static void return_entry_on_left()
 	shown_entries_right = shown_entries_left;
 	shown_entries_left = (deal_t*)deal_pop_end(&offscreen_entries_left);
 
-	if(!shown_entries_left) { set_status_message("Err: NULL pop in splitter.c:return_entry_on_left"); }
+	DEBUG_ASSERT(shown_entries_left);
 
 	right_indexing_limit_lower = left_indexing_limit_lower;
 	right_indexing_limit_upper = left_indexing_limit_upper;
@@ -599,8 +622,6 @@ static void return_entry_on_left()
 	left_indexing_limit_upper = deal_get_length(shown_entries_left);
 
 	index_limits_bounds_check();
-
-	deal_pop_end(&entry_path);
 }
 
 static void kbd_task(void)
@@ -610,6 +631,7 @@ static void kbd_task(void)
 	char buf[LCD_WIDTH/mainFont[0]];
 	char *msg = NULL;
 
+	DEBUG_PRINT("Keyboard task launched | Starting loop\n");
 	for(;;)
 	{
 		key = read_i2c_kbd();
@@ -627,25 +649,25 @@ static void kbd_task(void)
 
 		sel_y_bounds_check();
 
-
 		entry_t *selected_entry = (entry_t*)deal_get(relative_side, lower_index_limit+selector_y);
 
 		if(selected_entry->type==BRANCH && selected_entry != last_branch) { last_branch = selected_entry; }
 
 		bool is_expand = false;
 
+		DEBUG_PRINT("Key pressed | Evaluating\n");
 evaluate_key:
 		switch(key)
 		{
 			case KEY_DOWN:
-				move_selector_vertical(+1);
+				move_selector_vertical_updown(false);
 
 				deal_pop_end(&entry_path);
 				deal_add(&entry_path, get_currently_selected_entry());
 				break;
 
 			case KEY_UP:
-				move_selector_vertical(-1);
+				move_selector_vertical_updown(true);
 
 				deal_pop_end(&entry_path);
 				deal_add(&entry_path, get_currently_selected_entry());
@@ -655,11 +677,6 @@ evaluate_key:
 				if(!can_return_entry_on_left())
 				{
 					handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, false);
-					if(prev_selector_y != selector_y)
-					{
-						deal_pop_end(&entry_path);
-					}
-					deal_pop_end(&entry_path);
 
 					rewrite_entry(!selector_on_right, selector_y);
 					rewrite_entry(!prev_selector_right, prev_selector_y);
@@ -683,12 +700,7 @@ evaluate_key:
 				if(!can_expand_entry_on_right(selected_entry))
 				{
 					handle_selector_side_change(relative_side, relative_opposite_side, lower_index_limit, false);
-					if(prev_selector_y != selector_y)
-					{
-						deal_pop_end(&entry_path);
-						deal_add(&entry_path, last_branch);
-					}
-					deal_add(&entry_path, get_currently_selected_entry());
+
 					rewrite_entry(!selector_on_right, selector_y);
 					rewrite_entry(!prev_selector_right, prev_selector_y);
 					break;
@@ -705,7 +717,6 @@ evaluate_key:
 
 				print_all_entries_on_side(shown_entries_right, false);
 				print_all_entries_on_side(shown_entries_left, true);
-
 			break;
 
 			case KEY_ENTER:
@@ -742,14 +753,17 @@ evaluate_key:
 		// 		snprintf(bat_buf, sizeof(bat_buf), "Battery at %d%% (charging)", bat);
 		// 	set_status_message(bat_buf);
 		// }
-		draw_middle_line();
+
+		// draw_middle_line();
+		draw_middle_line_segment(selector_y);
+		draw_middle_line_segment(prev_selector_y);
 
 		// We need to resync the relative sides in case that they have changed
 		relative_side = (selector_on_right) ? shown_entries_right : shown_entries_left;
 		relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
 		selected_entry = (entry_t*)deal_get(relative_side, lower_index_limit+selector_y);
 
-		snprintf(buf, sizeof(buf), "sel_Y|depth|on_right  %d | %d | %d", selector_y, current_depth, selector_on_right);
+		// snprintf(buf, sizeof(buf), "sel_Y|depth|on_right  %d | %d | %d", selector_y, current_depth, selector_on_right);
 		// set_status_message(buf);
 
 		// Fancy stuff
@@ -765,13 +779,16 @@ evaluate_key:
 		)
 		{
 			shown_entries_right = (deal_t*)(selected_entry->value.p);
+			right_indexing_limit_lower = 0;
+			right_indexing_limit_upper = min(deal_get_length(shown_entries_right), max_entries_to_show);
+
 			// relative_opposite_side = (!selector_on_right) ? shown_entries_right : shown_entries_left;
 			print_all_entries_on_side(shown_entries_right, selector_on_right);
 		}
 		index_limits_bounds_check();
-		// if(msg) { free(msg); }
-		// msg = get_past_entries_filepath_style();
-		// set_status_message(msg);
+		if(msg) { free(msg); }
+		msg = get_past_entries_filepath_style(1024);
+		set_status_message(msg);
 	}
 }
 
@@ -787,12 +804,12 @@ uint16_t splitter_init(int rIDgiven, int maxDepth)
 	DEBUG_PRINT("Enabling score1\n");
 	enable_core1_lcdspi();
 
-	DEBUG_PRINT("Setting region settings ");
+	DEBUG_PRINT("Setting region settings\n");
 	lcd_region_set_asthetics(rIDgiven, ORANGE, BLACK, 1, SHIFT_DOWNWARDS, (unsigned char *)LuOS_System_Font_data);
 	lcdc1_region_clear(rIDgiven);
 	rID = rIDgiven;
 
-	DEBUG_PRINT("DONE | Calculating character offsets\n");
+	DEBUG_PRINT("Calculating character offsets\n");
 	divider_width = (int) (lcdc1_get_region_width(rIDgiven)%mainFont[0]);
 	divider_width = (int)( (divider_width==0) ? mainFont[0] : divider_width );
 
@@ -805,18 +822,18 @@ uint16_t splitter_init(int rIDgiven, int maxDepth)
 	max_entry_depth = (maxDepth>0) ? maxDepth : 2;
 	message_y_start = (max_entries_to_show*mainFont[1]);
 
-	DEBUG_PRINT("DONE | Setting empty entry\n");
+	DEBUG_PRINT("Setting empty entry\n");
 	empty_entry_name = calloc(max_entry_name_length+2, sizeof(char));
 	if(!empty_entry_name)
 	{
 		DEBUG_PRINT_ERR("Empty entry was not allocated - aborting\n");
 		return 0;
 	}
-	memset((char*)empty_entry_name, ' ', max_entry_name_length);
-	empty_entry_name[max_entry_name_length] = '\0';
+	memset((char*)empty_entry_name, ' ', max_entry_name_length+1);
+	empty_entry_name[max_entry_name_length+1] = '\0';
 	// clean_string((char*)empty_entry_name, max_entry_name_length);
 
-	DEBUG_PRINT("DONE | Allocating misc. string buffers\n");
+	DEBUG_PRINT("Allocating misc. string buffers\n");
 	edit_print = calloc(lcd_get_region_width(rID)/mainFont[0], sizeof(char));
 	last_msg = calloc(lcd_get_region_width(rID)/mainFont[0], sizeof(char));
 	if(!edit_print)
@@ -831,10 +848,10 @@ uint16_t splitter_init(int rIDgiven, int maxDepth)
 	}
 
 	inited = 1;
-	DEBUG_PRINT("DONE | Initing i2ckbd\n");
+	DEBUG_PRINT("Initing i2ckbd\n");
 	init_i2c_kbd();
 
-	DEBUG_PRINT("DONE | Displaying first pixels\n");
+	DEBUG_PRINT("Displaying first pixels\n");
 
 	set_status_message("Splitter Inited\0");
 	DEBUG_PRINT("INITED DONE\n");
@@ -845,7 +862,7 @@ static void w_reboot_wrap(void) { watchdog_reboot(0, 0, 0); return; }
 
 void splitter_start(void)
 {
-	DEBUG_PRINT("Starting splitter");
+	DEBUG_PRINT("Starting splitter\n");
 	if(!inited) { DEBUG_PRINT_ERR("Attempted to start splitter without initialization\n"); return; }
 
 	// Some code I used to test/debug this whole library
@@ -877,12 +894,13 @@ void splitter_start(void)
 	}
 	deal_add(&entry_path, first_selected);
 
+	DEBUG_PRINT("Checking bounds and printing all entries\n");
 	index_limits_bounds_check();
 	print_all_entries_on_side(shown_entries_left, true);
 	print_all_entries_on_side(shown_entries_right, false);
 	draw_middle_line();
 
-	DEBUG_PRINT("Splitter started, launching keyboard task\n");
+	DEBUG_PRINT("Splitter started | Launching keyboard task\n");
 	kbd_task();
 
 	// This point should not be reached.

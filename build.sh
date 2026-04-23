@@ -26,14 +26,14 @@ while true; do
 	DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')
 done
 
-sleep 3
+# sleep 3
 # https://www.pragmaticlinux.com/2023/01/how-to-list-all-serial-ports-on-linux/
 PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep -m 1 -v "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
-while [ true ]; do
+while true; do
 	if [ "$PORT" ]; then
 		break
 	fi
 	sleep 1
 	PORT=$(ls -l /sys/class/tty/*/device/driver | grep -v "/drivers/port" | grep -m 1 -v "ch341-uart" | awk '{print $9}' | awk -F'/' '{print "/dev/" $5}')
 done
-konsole --hold -e picocom "$PORT" &
+konsole -e picocom "$PORT" &

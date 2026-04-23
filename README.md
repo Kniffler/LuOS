@@ -4,6 +4,10 @@ Loser µ-controller Operating System
 A neat little contraption of my own design.
 
 # TODO
+- Add setting functionality
+- Add comments and revise code in `splitter.c` and `lcdspi.h`
+- Add functionality to flash (this is a bootloader afterall)
+- Continue the GSM General Settings Manager library to add file support
 
 ## Contents:
 - [The Bootloader](#bootloader)

@@ -4,8 +4,9 @@ include(pico_sdk_import.cmake)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+set(PROJECT_NAME LuOS)
 
-project(LuOS C CXX ASM)
+project(${PROJECT_NAME} C CXX ASM)
 
 pico_sdk_init()
 
@@ -19,8 +20,9 @@ add_subdirectory(src/i2ckbd)
 add_subdirectory(src/lcdspi)
 add_subdirectory(src/splitter)
 add_subdirectory(src/GSM)
+add_subdirectory(src/apps)
 
-add_executable(LuOS main.c)
+add_executable(${PROJECT_NAME} main.c)
 
 add_compile_options(-Wall
 	# -Wno-format
@@ -37,7 +39,7 @@ add_compile_options(-Wall
 
 string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
 
-target_link_libraries(LuOS
+target_link_libraries(${PROJECT_NAME}
 	pico_stdlib
 	pico_bootsel_via_double_reset
 	hardware_flash
@@ -56,11 +58,12 @@ target_link_libraries(LuOS
 	filesystem_fat
 	filesystem_vfs
 )
+# pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
 
-pico_enable_stdio_usb(LuOS 1)
-pico_enable_stdio_uart(LuOS 0)
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
 
-pico_add_extra_outputs(LuOS)
+pico_add_extra_outputs(${PROJECT_NAME})
 
 # pico_enable_filesystem(${CMAKE_PROJECT_NAME})
 
@@ -72,8 +75,16 @@ pico_add_extra_outputs(LuOS)
 function(enable_sdcard_app target)
   #pico_set_linker_script(${target} ${CMAKE_SOURCE_DIR}/memmap_sdcard_app.ld)
   if(${PICO_PLATFORM} STREQUAL "rp2040")
-    pico_set_linker_script(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/memmap_default_rp2040.ld)
+    pico_set_linker_script(${target} ${CMAKE_SOURCE_DIR}/memmap_default_rp2040.ld)
   elseif(${PICO_PLATFORM} MATCHES "rp2350")
-    pico_set_linker_script(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/memmap_default_rp2350.ld)
+    pico_set_linker_script(${target} ${CMAKE_SOURCE_DIR}/memmap_default_rp2350.ld)
   endif()
 endfunction()
+
+
+# project(${TESTA}
+# 	DESCRIPTION "Me test stuff for me bootloader"
+# )
+# add_executable(${TESTA} src/apps/test/test.c)
+# enable_sdcard_app(testA)
+
