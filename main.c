@@ -454,4 +454,6 @@ for(;;)
 	splitter_start();
 
 	for(;;) { tight_loop_contents(); }
+
+	// Comment to mark first commit in new branch Diff-LCD-buf
 }
