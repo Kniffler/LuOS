@@ -58,7 +58,7 @@ target_link_libraries(${PROJECT_NAME}
 	filesystem_fat
 	filesystem_vfs
 )
-# pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
+pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
 pico_enable_stdio_uart(${PROJECT_NAME} 0)

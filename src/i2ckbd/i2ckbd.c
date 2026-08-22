@@ -25,7 +25,7 @@ int read_i2c_kbd() {
 	int c = -1;
 	msg[0] = 0x09;
 
-	if (i2c_inited == 0) return -2;
+	if (i2c_inited == 0) return -1;
 
 	retval = i2c_write_timeout_us(I2C_KBD_MOD, I2C_KBD_ADDR, msg, 1, false, 500000);
 	if (retval == PICO_ERROR_GENERIC || retval == PICO_ERROR_TIMEOUT) {

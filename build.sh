@@ -1,9 +1,14 @@
 #!/bin/bash
 
+# Uncomment for rp2350 flashing
+# cmake -DPICO_BOARD=pico2 -DPICO_PLATFORM=rp2350 -DPICO_SDK_PATH=$HOME/pico-sdk -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -B build
 cmake -DPICO_SDK_PATH=$HOME/pico-sdk -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -B build
+
 make -C build
 
 OUTPUT_FILE="build/LuOS.uf2"
+
+# DEVICE_MOUNTS_BY_NAME="RP2350"
 DEVICE_MOUNTS_BY_NAME="RPI-RP2"
 
 DEVICE=$(lsblk -o NAME,LABEL -ln | grep -m1 $DEVICE_MOUNTS_BY_NAME | awk '{print "/dev/"$1}')

@@ -3,7 +3,8 @@
 
 // Comment out to turn of debug messages sent over stdout
 #define USE_DEBUG 1
-#define WAIT_ON_FIRST_INPUT 1
+//#define WAIT_ON_FIRST_SERIAL_INPUT 1
+//#define WAIT_ON_FIRST_KBD_INPUT 1
 
 
 // GPIOs for SPI interface (SD card)

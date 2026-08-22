@@ -6,6 +6,7 @@
 #include <string.h>
 #include "hardware/gpio.h"
 // #include "i2ckbd.h"
+#include "i2ckbd.h"
 #include "lcdspi.h"
 #include "splitter.h"
 #include <hardware/flash.h>
@@ -85,16 +86,38 @@ bool fs_init(void)
 
 static bool __not_in_flash_func(is_same_as_existing_program)(FILE *fp)
 {
+	FILE *fp_separate = fp;
 	uint8_t buffer[FLASH_SECTOR_SIZE] = {0};
 	size_t program_size = 0;
 	size_t len = 0;
-	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0)
+	while ((len = fread(buffer, 1, sizeof(buffer), fp_separate)) > 0)
 	{
 		uint8_t *flash = (uint8_t *)(XIP_BASE + SD_BOOT_FLASH_OFFSET + program_size);
-		if (memcmp(buffer, flash, len) != 0)
+		if(memcmp(buffer, flash, len) != 0)
 		{ return false; }
 
 		program_size += len;
+	}
+	return true;
+}
+
+// Check if a valid application exists in flash by examining the vector table
+static bool is_valid_application(uint32_t *app_location)
+{
+	// Check that the initial stack pointer is within a plausible RAM region.
+	// Assumed range for Pico: 0x20000000 to 0x20040000 + SCRATCH_X + SCRATCH_Y
+	// Which is the same as the range 0x20000000 to 0x20042000
+	uint32_t stack_pointer = app_location[0];
+	if (stack_pointer < 0x20000000 || stack_pointer > (MAX_RAM + 2*4*1024) ) // MAX_RAM + 8KB (4KB per scratch region)
+	{
+		return false;
+	}
+
+	// Check that the reset vector is within the valid flash application area
+	uint32_t reset_vector = app_location[1];
+	if (reset_vector < (0x10000000 + SD_BOOT_FLASH_OFFSET) || reset_vector > (0x10000000 + PICO_FLASH_SIZE_BYTES))
+	{
+		return false;
 	}
 	return true;
 }
@@ -103,22 +126,52 @@ static bool __not_in_flash_func(is_same_as_existing_program)(FILE *fp)
 static bool __not_in_flash_func(load_program)(const char *filename)
 {
 	FILE *fp = fopen(filename, "r");
-	if (fp == NULL) { return false; }
-
-	if (is_same_as_existing_program(fp))
+	if (fp == NULL)
 	{
-		return true; // save ourselves this workload
+		DEBUG_PRINT_ERR("open %s fail: %s\n", filename, strerror(errno));
+		return false;
 	}
+	DEBUG_PRINT("Checking filepath \"%s\"\n", filename);
 
 	// Check file size to ensure it doesn't exceed the available flash space
-	if (fseek(fp, 0, SEEK_END) == -1) { fclose(fp); return false; }
+	if (fseek(fp, 0, SEEK_END) != 0)
+	{
+		DEBUG_PRINT_ERR("seek err: %s\n", strerror(errno));
+		fclose(fp);
+		return false;
+	}
 
 	long file_size = ftell(fp);
+	if (file_size <= 0) // Negative, to include error code -1
+	{
+		DEBUG_PRINT_ERR("invalid size: %ld\n", file_size);
+		fclose(fp);
+		return false;
+	}
 
-	if (file_size <= 0) { fclose(fp); return false; }
-	if (file_size > MAX_APP_SIZE) { fclose(fp); return false; }
-	if (fseek(fp, 0, SEEK_SET) == -1) { fclose(fp); return false; }
+	if (file_size > MAX_APP_SIZE)
+	{
+		DEBUG_PRINT_ERR("file too large (%ld > %d)\n", file_size, MAX_APP_SIZE);
+		fclose(fp);
+		return false;
+	}
 
+	DEBUG_PRINT("Updating %ld bytes\n", file_size);
+	if (fseek(fp, 0, SEEK_SET) != 0)
+	{
+		DEBUG_PRINT_ERR("seek err: %s\n", strerror(errno));
+		fclose(fp);
+		return false;
+	}
+
+	// Only check for validity after the guard clauses to make sure the file pointer (fp) is valid
+	if ( is_same_as_existing_program(fp) && is_valid_application((uint32_t*)(XIP_BASE + SD_BOOT_FLASH_OFFSET)) )
+	{
+		DEBUG_PRINT("Same program already valid in flash, skipping\n");
+		fclose(fp);
+		return true;
+	}
+	// fseek(fp, 0, SEEK_SET);
 
 	size_t program_size = 0;
 
@@ -144,22 +197,22 @@ static bool __not_in_flash_func(load_program)(const char *filename)
 		/* Don't program the first page, and save it.
 			This way we prevent launching apps that have not yet been fully loaded into flash.
 		 */
-		if(program_size != 0)
-		{
+		// if(program_size != 0)
+		// {
 			flash_range_program(SD_BOOT_FLASH_OFFSET + program_size, buffer, len);
-		}else{
-			for(int i = 0; i < FLASH_SECTOR_SIZE; i++) { first_page[i] = buffer[i]; }
-			flen = len;
-		}
-
-		restore_interrupts(ints);
+			restore_interrupts(ints);
+		// }else{
+			// restore_interrupts(ints);
+			// for(int i = 0; i < FLASH_SECTOR_SIZE; i++) { first_page[i] = buffer[i]; }
+			// flen = len;
+		// }
 
 		program_size += len;
 	}
 
-	uint32_t ints = save_and_disable_interrupts();
-	flash_range_program(SD_BOOT_FLASH_OFFSET, first_page, flen);
-	restore_interrupts(ints);
+	// uint32_t ints = save_and_disable_interrupts();
+	// flash_range_program(SD_BOOT_FLASH_OFFSET, first_page, flen);
+	// restore_interrupts(ints);
 
 	fclose(fp);
 	return true;
@@ -181,25 +234,6 @@ void __not_in_flash_func(launch_application_from)(uint32_t *app_location)
 		:);
 }
 
-// Check if a valid application exists in flash by examining the vector table
-static bool is_valid_application(uint32_t *app_location)
-{
-	// Check that the initial stack pointer is within a plausible RAM region (assumed range for Pico: 0x20000000 to 0x20040000)
-	uint32_t stack_pointer = app_location[0];
-	if (stack_pointer < 0x20000000 || stack_pointer > MAX_RAM)
-	{
-		return false;
-	}
-
-	// Check that the reset vector is within the valid flash application area
-	uint32_t reset_vector = app_location[1];
-	if (reset_vector < (0x10000000 + SD_BOOT_FLASH_OFFSET) || reset_vector > (0x10000000 + PICO_FLASH_SIZE_BYTES))
-	{
-		return false;
-	}
-	return true;
-}
-
 int load_and_launch_firmware_by_path(const char *path)
 {
 	// Attempt to load the application from the SD card
@@ -212,15 +246,20 @@ int load_and_launch_firmware_by_path(const char *path)
 	// Check if the app in flash is valid
 	bool has_valid_app = is_valid_application(app_location);
 
-	// Loading was valid and successfull
-	if (load_success || has_valid_app)
+	// Loading was valid and successful
+	if (load_success && has_valid_app)
 	{
+		DEBUG_PRINT("Launching program at location %X\n", app_location);
+
 		// Small delay to allow printf to complete
 		sleep_ms(100);
 		launch_application_from(app_location);
-	}
-	else
+	}else
 	{
+		DEBUG_PRINT_ERR_UNDER_CONDITION(!has_valid_app, "Launching program at location %X failed due to invalidity\n", app_location);
+		DEBUG_PRINT_ERR_UNDER_CONDITION(!load_success, "Launching program at location %X failed due to unsuccessful load\n", app_location);
+		DEBUG_PRINT_ERR("Debugging info: \n\tStack pointer: %X\n\tReset Vector: %X\n", app_location[0], app_location[1]);
+		DEBUG_PRINT_ERR("Rebooting...", app_location);
 		sleep_ms(2000);
 		// Trigger a watchdog reboot
 		watchdog_reboot(0, 0, 0);
@@ -248,7 +287,7 @@ void final_selection_callback(const char *path)
 	}
 
 	char msg[128];
-	snprintf(msg, sizeof(msg), "File: %s", path);
+	snprintf(msg, sizeof(msg), "Loading %s", path);
 	set_status_message(msg);
 
 	sleep_ms(200);
@@ -260,8 +299,9 @@ void gather_path_and_flash(void)
 	char *received_path = get_past_entries_filepath_style(1024);
 	char *base_path = calloc(1024, sizeof(char));
 	strcpy(base_path, root);
-	strcpy(base_path, received_path);
+	strcat(base_path, received_path);
 	free(received_path);
+	splitter_free_everything();
 	DEBUG_PRINT("Flashing file %s\n", base_path);
 	final_selection_callback(base_path);
 	DEBUG_PRINT_ERR("Final selection failed\n");
@@ -275,9 +315,13 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 	struct dirent *ent;
 	while((ent = readdir(root_dir))!=NULL)
 	{
-
 		bool is_dir = ent->d_type == DT_DIR;
 
+		// Hide hidden files/folders and ignore the FAT32 system volume information.
+		if(ent->d_name[0]=='.' || strcmp(ent->d_name, "System Volume Information")==0)
+		{
+			continue;
+		}
 		// snprintf(msg, sizeof(msg), "Working on: %s/|%s|%c", parent_folder_path_abs, ent->d_name, (is_dir) ? '/' : '\0');
 		// set_status_message(msg);
 		entry_value_t potential_value;
@@ -334,13 +378,23 @@ int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_
 int main()
 {
 	stdio_init_all();
-#ifdef WAIT_ON_FIRST_INPUT
+#ifdef WAIT_ON_FIRST_SERIAL_INPUT
 	char buf[512];
 	for(;;)
 	{
+		DEBUG_PRINT("PRESS ANY SERIALLY SENT KEY TO START DEVICE\n");
 		char c = fgetc(stdin);
 		if(c) { break; }
 	}
+#endif
+#ifdef WAIT_ON_FIRST_KBD_INPUT
+for(;;)
+{
+	DEBUG_PRINT("PRESS ANY KEY ON KEYBOARD TO START DEVICE\n");
+	init_i2c_kbd();
+	int c = read_i2c_kbd();
+	if(c!=-1) { break; }
+}
 #endif
 	// for(;;) {
 	DEBUG_PRINT("Program started\n");

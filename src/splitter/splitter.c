@@ -14,7 +14,6 @@
 #include "src/include/debug.h"
 
 #define USE_DEAL_VOID_P 1
-// #define DEAL_FREE_DATA() (free(node->data.value_p)) // This is a surprise tool that'll help us later!
 #include "DEAL.h"
 
 #include "keyboard_define.h"
@@ -132,7 +131,8 @@ static void clean_string(char *msg, size_t size_limit)
 void set_status_message(char *to)
 {
 	if(in_setting_editor || strcmp(last_msg, to)==0) { return; }
-	DEBUG_PRINT("Setting status message to \"%s\"\n", to);
+	// DEBUG_PRINT("Setting status message to \"%s\"\n", to);
+	DEBUG_PRINT("\"%s\"\n", to);
 
 	int16_t temp_x = lcdc1_get_current_x(rID);
 	int16_t temp_y = lcdc1_get_current_y(rID);
@@ -629,7 +629,7 @@ static void kbd_task(void)
 	static int key;
 	static int bat;
 	char buf[LCD_WIDTH/mainFont[0]];
-	char *msg = NULL;
+	// char *msg = NULL;
 
 	DEBUG_PRINT("Keyboard task launched | Starting loop\n");
 	for(;;)
@@ -731,7 +731,7 @@ evaluate_key:
 						if(!selected_entry->value.action) { break; }
 						if(selected_entry->exits)
 						{
-							if(msg) { free(msg); }
+							// if(msg) { free(msg); }
 							splitter_free_everything();
 						}
 						selected_entry->value.action();
@@ -786,9 +786,9 @@ evaluate_key:
 			print_all_entries_on_side(shown_entries_right, selector_on_right);
 		}
 		index_limits_bounds_check();
-		if(msg) { free(msg); }
-		msg = get_past_entries_filepath_style(1024);
-		set_status_message(msg);
+		// if(msg) { free(msg); }
+		// msg = get_past_entries_filepath_style(1024);
+		// set_status_message(msg);
 	}
 }
 

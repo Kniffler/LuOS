@@ -11,7 +11,6 @@
 // Stole some code from
 // https://github.com/adwuard/Picocalc_SD_Boot/blob/main/src/debug.h
 
-
 #define DEBUG_PRINT(fmt, ...) printf("%s: ", __func__); printf(fmt, ##__VA_ARGS__)
 #define DEBUG_PRINT_ERR(fmt, ...) fprintf(stderr, "ERROR in func %s at line #%d: ", __func__, __LINE__); \
 	fprintf(stderr, fmt, ##__VA_ARGS__)
@@ -24,9 +23,9 @@ if(!cond) {					\
 }
 
 #define DEBUG_PRINT_UNDER_CONDITION(cond, toPrint, ...) \
-if(cond) { printf("%s: ", __func__); printf(toPrint, ##__VA_ARGS__; ) }
+if(cond) { DEBUG_PRINT(toPrint, ##__VA_ARGS__); }
 #define DEBUG_PRINT_ERR_UNDER_CONDITION(cond, toPrint, ...) \
-if(cond) { printf("%s: ", __func__); fprintf(stderr, toPrint, ##__VA_ARGS__; ) }
+if(cond) { DEBUG_PRINT_ERR(toPrint, ##__VA_ARGS__); }
 
 #else
 
