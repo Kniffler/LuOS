@@ -617,9 +617,7 @@ void hw_read_spi(unsigned char *buff, int cnt) {
 }
 
 void hw_send_spi(const unsigned char *buff, int cnt) {
-
 	spi_write_blocking(Pico_LCD_SPI_MOD, buff, cnt);
-
 }
 
 void pin_set_bit(int pin, uint_t offset) {
@@ -789,9 +787,7 @@ void lcd_spi_raise_cs(void) {
 }
 
 void lcd_spi_lower_cs(void) {
-
 	gpio_put(Pico_LCD_CS, 0);
-
 }
 
 void spi_write_data(unsigned char data) {
