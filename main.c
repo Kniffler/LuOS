@@ -1,379 +1,25 @@
+#include <hardware/timer.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <pico/stdio.h>
 #include <pico/stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include "hardware/gpio.h"
-// #include "i2ckbd.h"
+// #include "hardware/gpio.h"
+#include "fonts/font1.h"
+#include "fonts/LuOS_System_Font.h"
+
 #include "i2ckbd.h"
-#include "lcdspi.h"
-#include "splitter.h"
-#include <hardware/flash.h>
-#include <hardware/watchdog.h>
+
+#include "buffy.h"
 #include "config.h"
 
 #include <pico/platform/common.h>
 #include <pico/stdlib.h>
-#include <hardware/sync.h>
-
-#include "blockdevice/sd.h"
-#include "filesystem/fat.h"
-#include "filesystem/vfs.h"
-#include "sys/dirent.h"
-#include <dirent.h>
 
 #include "src/include/debug.h"
-/*
- * #include "text_directory_ui.h"
- * #include "key_event.h"
- */
-// Vector and RAM offset
+#include "src/keyboard_define.h"
 
-#if PICO_RP2040
-#define VTOR_OFFSET M0PLUS_VTOR_OFFSET
-#define MAX_RAM 0x20040000
-
-#elif PICO_RP2350
-#define VTOR_OFFSET M33_VTOR_OFFSET
-#define MAX_RAM 0x20080000
-#endif
-
-static char *root = "/sd";
-const int max_depth = 4;
-
-bool sd_card_inserted(void)
-{
-	return !gpio_get(SD_DET_PIN);
-}
-
-bool fs_init(void)
-{
-	blockdevice_t *sd = blockdevice_sd_create(spi0,
-											  SD_MOSI_PIN,
-										   SD_MISO_PIN,
-										   SD_SCLK_PIN,
-										   SD_CS_PIN,
-										   125000000 / 2 / 4, // 15.6MHz
-										   true);
-
-	filesystem_t *fat = filesystem_fat_create();
-
-	int err = fs_mount(root, fat, sd);
-	if (err != -1)
-	{
-		DEBUG_PRINT("Mounted SD card at %s\n", root);
-		return true;
-	}
-
-	err = fs_format(fat, sd);
-	if (err == -1)
-	{
-		DEBUG_PRINT_ERR("Failed to format SD card\n");
-		return false;
-	}
-
-	err = fs_mount(root, fat, sd);
-	if (err == -1)
-	{
-		DEBUG_PRINT_ERR("Failed to mount SD card at %s\n", root);
-		return false;
-	}
-
-	DEBUG_PRINT("Mounted SD card at %s\n", root);
-	return true;
-}
-
-static bool __not_in_flash_func(is_same_as_existing_program)(FILE *fp)
-{
-	FILE *fp_separate = fp;
-	uint8_t buffer[FLASH_SECTOR_SIZE] = {0};
-	size_t program_size = 0;
-	size_t len = 0;
-	while ((len = fread(buffer, 1, sizeof(buffer), fp_separate)) > 0)
-	{
-		uint8_t *flash = (uint8_t *)(XIP_BASE + SD_BOOT_FLASH_OFFSET + program_size);
-		if(memcmp(buffer, flash, len) != 0)
-		{ return false; }
-
-		program_size += len;
-	}
-	return true;
-}
-
-// Check if a valid application exists in flash by examining the vector table
-static bool is_valid_application(uint32_t *app_location)
-{
-	// Check that the initial stack pointer is within a plausible RAM region.
-	// Assumed range for Pico: 0x20000000 to 0x20040000 + SCRATCH_X + SCRATCH_Y
-	// Which is the same as the range 0x20000000 to 0x20042000
-	uint32_t stack_pointer = app_location[0];
-	if (stack_pointer < 0x20000000 || stack_pointer > (MAX_RAM + 2*4*1024) ) // MAX_RAM + 8KB (4KB per scratch region)
-	{
-		return false;
-	}
-
-	// Check that the reset vector is within the valid flash application area
-	uint32_t reset_vector = app_location[1];
-	if (reset_vector < (0x10000000 + SD_BOOT_FLASH_OFFSET) || reset_vector > (0x10000000 + PICO_FLASH_SIZE_BYTES))
-	{
-		return false;
-	}
-	return true;
-}
-
-// This function must run from RAM since it erases and programs flash memory
-static bool __not_in_flash_func(load_program)(const char *filename)
-{
-	FILE *fp = fopen(filename, "r");
-	if (fp == NULL)
-	{
-		DEBUG_PRINT_ERR("open %s fail: %s\n", filename, strerror(errno));
-		return false;
-	}
-	DEBUG_PRINT("Checking filepath \"%s\"\n", filename);
-
-	// Check file size to ensure it doesn't exceed the available flash space
-	if (fseek(fp, 0, SEEK_END) != 0)
-	{
-		DEBUG_PRINT_ERR("seek err: %s\n", strerror(errno));
-		fclose(fp);
-		return false;
-	}
-
-	long file_size = ftell(fp);
-	if (file_size <= 0) // Negative, to include error code -1
-	{
-		DEBUG_PRINT_ERR("invalid size: %ld\n", file_size);
-		fclose(fp);
-		return false;
-	}
-
-	if (file_size > MAX_APP_SIZE)
-	{
-		DEBUG_PRINT_ERR("file too large (%ld > %d)\n", file_size, MAX_APP_SIZE);
-		fclose(fp);
-		return false;
-	}
-
-	DEBUG_PRINT("Updating %ld bytes\n", file_size);
-	if (fseek(fp, 0, SEEK_SET) != 0)
-	{
-		DEBUG_PRINT_ERR("seek err: %s\n", strerror(errno));
-		fclose(fp);
-		return false;
-	}
-
-	// Only check for validity after the guard clauses to make sure the file pointer (fp) is valid
-	if ( is_same_as_existing_program(fp) && is_valid_application((uint32_t*)(XIP_BASE + SD_BOOT_FLASH_OFFSET)) )
-	{
-		DEBUG_PRINT("Same program already valid in flash, skipping\n");
-		fclose(fp);
-		return true;
-	}
-	// fseek(fp, 0, SEEK_SET);
-
-	size_t program_size = 0;
-
-	uint8_t first_page[FLASH_SECTOR_SIZE] = {0};
-	uint8_t buffer[FLASH_SECTOR_SIZE] = {0};
-
-	size_t len = 0;
-	size_t flen = 0;
-
-	// Erase and program flash in FLASH_SECTOR_SIZE chunks
-	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0)
-	{
-		// Ensure we don't write beyond the application area
-		if ((program_size + len) > MAX_APP_SIZE)
-		{
-			fclose(fp);
-			return false;
-		}
-
-		uint32_t ints = save_and_disable_interrupts();
-		flash_range_erase(SD_BOOT_FLASH_OFFSET + program_size, FLASH_SECTOR_SIZE);
-
-		/* Don't program the first page, and save it.
-			This way we prevent launching apps that have not yet been fully loaded into flash.
-		 */
-		// if(program_size != 0)
-		// {
-			flash_range_program(SD_BOOT_FLASH_OFFSET + program_size, buffer, len);
-			restore_interrupts(ints);
-		// }else{
-			// restore_interrupts(ints);
-			// for(int i = 0; i < FLASH_SECTOR_SIZE; i++) { first_page[i] = buffer[i]; }
-			// flen = len;
-		// }
-
-		program_size += len;
-	}
-
-	// uint32_t ints = save_and_disable_interrupts();
-	// flash_range_program(SD_BOOT_FLASH_OFFSET, first_page, flen);
-	// restore_interrupts(ints);
-
-	fclose(fp);
-	return true;
-}
-
-// This function jumps to the application entry point
-// It must update the vector table and stack pointer before jumping
-void __not_in_flash_func(launch_application_from)(uint32_t *app_location)
-{
-	// https://vanhunteradams.com/Pico/Bootloader/Bootloader.html
-	uint32_t *new_vector_table = app_location;
-	volatile uint32_t *vtor = (uint32_t *)(PPB_BASE + VTOR_OFFSET);
-	*vtor = (uint32_t)new_vector_table;
-	asm volatile(
-		"msr msp, %0\n"
-		"bx %1\n"
-		:
-		: "r"(new_vector_table[0]), "r"(new_vector_table[1])
-		:);
-}
-
-int load_and_launch_firmware_by_path(const char *path)
-{
-	// Attempt to load the application from the SD card
-	// bool load_success = load_program(FIRMWARE_PATH);
-	bool load_success = load_program(path);
-
-	// Get the pointer to the application flash area
-	uint32_t *app_location = (uint32_t *)(XIP_BASE + SD_BOOT_FLASH_OFFSET);
-
-	// Check if the app in flash is valid
-	bool has_valid_app = is_valid_application(app_location);
-
-	// Loading was valid and successful
-	if (load_success && has_valid_app)
-	{
-		DEBUG_PRINT("Launching program at location %X\n", app_location);
-
-		// Small delay to allow printf to complete
-		sleep_ms(100);
-		launch_application_from(app_location);
-	}else
-	{
-		DEBUG_PRINT_ERR_UNDER_CONDITION(!has_valid_app, "Launching program at location %X failed due to invalidity\n", app_location);
-		DEBUG_PRINT_ERR_UNDER_CONDITION(!load_success, "Launching program at location %X failed due to unsuccessful load\n", app_location);
-		DEBUG_PRINT_ERR("Debugging info: \n\tStack pointer: %X\n\tReset Vector: %X\n", app_location[0], app_location[1]);
-		DEBUG_PRINT_ERR("Rebooting...", app_location);
-		sleep_ms(2000);
-		// Trigger a watchdog reboot
-		watchdog_reboot(0, 0, 0);
-	}
-
-	// We should never reach here
-	while (1)
-	{
-		tight_loop_contents();
-	}
-}
-
-void final_selection_callback(const char *path)
-{
-	// Trigger firmware loading with the selected path
-
-	const char *extension = ".bin";
-	size_t path_len = strlen(path);
-	size_t ext_len = strlen(extension);
-
-	if (path_len < ext_len || strcmp(path + path_len - ext_len, extension) != 0)
-	{
-		set_status_message("Error: Not a valid .bin file");
-		return;
-	}
-
-	char msg[128];
-	snprintf(msg, sizeof(msg), "Loading %s", path);
-	set_status_message(msg);
-
-	sleep_ms(200);
-
-	load_and_launch_firmware_by_path(path);
-}
-void gather_path_and_flash(void)
-{
-	char *received_path = get_past_entries_filepath_style(1024);
-	char *base_path = calloc(1024, sizeof(char));
-	strcpy(base_path, root);
-	strcat(base_path, received_path);
-	free(received_path);
-	splitter_free_everything();
-	DEBUG_PRINT("Flashing file %s\n", base_path);
-	final_selection_callback(base_path);
-	DEBUG_PRINT_ERR("Final selection failed\n");
-}
-
-int setup_entry_structure(int parentID, DIR *root_dir, char *parent_folder_path_abs, int depth)
-{
-	// set_status_message("We in da function!");
-	if(depth<0) { return -1; }
-	char msg[128];
-	struct dirent *ent;
-	while((ent = readdir(root_dir))!=NULL)
-	{
-		bool is_dir = ent->d_type == DT_DIR;
-
-		// Hide hidden files/folders and ignore the FAT32 system volume information.
-		if(ent->d_name[0]=='.' || strcmp(ent->d_name, "System Volume Information")==0)
-		{
-			continue;
-		}
-		// snprintf(msg, sizeof(msg), "Working on: %s/|%s|%c", parent_folder_path_abs, ent->d_name, (is_dir) ? '/' : '\0');
-		// set_status_message(msg);
-		entry_value_t potential_value;
-		if(is_dir)
-		{
-			potential_value.p = calloc(1, sizeof(entry_value_t));
-		}else
-		{
-			potential_value.action = gather_path_and_flash;
-		}
-		ent->d_name[strlen(ent->d_name)] = '\0';
-		int ID = create_entry_return_ID(ent->d_name, (is_dir) ? BRANCH : FUNCTIONABLE, 0, potential_value);
-		if(ID<1)
-		{
-			snprintf((char*)msg, sizeof(msg), "Failed, with exit num %d", ID);
-			set_status_message(msg);
-			if(potential_value.p) { free(potential_value.p); }
-			return -2;
-		}
-
-		if(is_dir)
-		{
-			DEBUG_PRINT("%s is a directory | Creating children\n", ent->d_name);
-			// snprintf(msg, sizeof(msg), "New entry \"%s\" is a dir", ent->d_name);
-			// set_status_message(msg);
-
-			char *new_path = calloc(strlen(parent_folder_path_abs)+strlen(ent->d_name)+5, sizeof(char));
-			if(!new_path) { set_status_message("Error: failed to allocate entry name"); return -3; }
-			strcpy(new_path, parent_folder_path_abs);
-			strcat(new_path, "/");
-			strcat(new_path, ent->d_name);
-
-			// strcat(new_path, "\0");
-
-			// sleep_ms(300);
-			// snprintf(msg, sizeof(msg), "New path: %s", new_path);
-			// set_status_message(msg);
-
-			DIR *next = opendir(new_path);
-			setup_entry_structure(ID, next, new_path, depth-1);
-			closedir(next);
-
-			free(new_path);
-		}
-		append_entry_to_branch(parentID, ID);
-		// sleep_ms(1000);
-	}
-	// if(parent_folder_path_abs!=root) { free(parent_folder_path_abs); }
-	// closedir(root_dir);
-
-	return 0;
-}
 
 int main()
 {
@@ -388,70 +34,84 @@ int main()
 	}
 #endif
 #ifdef WAIT_ON_FIRST_KBD_INPUT
-for(;;)
-{
-	DEBUG_PRINT("PRESS ANY KEY ON KEYBOARD TO START DEVICE\n");
 	init_i2c_kbd();
-	int c = read_i2c_kbd();
-	if(c!=-1) { break; }
-}
+	for(;;)
+	{
+		DEBUG_PRINT("PRESS ANY KEY ON KEYBOARD TO START DEVICE\n");
+		int c = read_i2c_kbd();
+		busy_wait_ms(50);
+		if(c!=-1) { break; }
+	}
 #endif
-	// for(;;) {
+
 	DEBUG_PRINT("Program started\n");
 	DEBUG_PRINT_ERR("MESSAGE ERROR TEST\n");
+
+	int rate = lcd_init();
+	DEBUG_PRINT("Inited SPI at %dMhz, while requested at %dMhz\n", rate/(1000*1000), LCD_SPI_FREQ/(1000*1000));
+	lcd_clear(RGB565(0b11111, 0b000000, 0b00000));
+	busy_wait_ms(1000);
+	lcd_clear(RGB565(0b00000, 0b000000, 0b11111));
+	busy_wait_ms(1000);
+	lcd_clear(RGB565(0b00000, 0b111111, 0b00000));
+	busy_wait_ms(1000);
+	lcd_draw_rect(0, 160, 320, 160, RGB565(0b11111, 0b000000, 0b00000));
+	lcd_draw_rect(0, 320, 320, 160, RGB565(0b11111, 0b000000, 0b11111));
+
+
+	busy_wait_ms(1000);
+	lcd_clear(0);
+	// lcd_scroll(160);
+	// font_t meFont = (unsigned char*)font1_data;
+	font_t meFont = (unsigned char*)LuOS_System_Font_data;
+	unsigned char str[] =  "\017 \016Hello W\bWorld. Hello W\bWorld. Hello W\bWorld. Hello W\bWorld. Hello W\bWorld. Hello W\bWorld.";
+	unsigned char str2[] = " ";
+	// char c = 'B';
+	// lcd_draw_string_on_line(str, strlen(str), 0, 0, meFont, RGB565(0b11111, 0b000000, 0b11111), false);
+	int x = 0, y = 0, c = -1;
+	lcd_draw_string(str, strlen(str), x, y, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+	init_i2c_kbd();
+	for(;;)
+	{
+		c = read_i2c_kbd();
+		if(c==-1) { continue; }
+		switch(c)
+		{
+			case KEY_UP: y--; break;
+			case KEY_DOWN: y++; break;
+			case KEY_LEFT: x--; break;
+			case KEY_RIGHT: x++; break;C
+		}
+		if(y<0) { y += LCD_RES_V; }
+		if(x<0) { x += LCD_RES_H; }
+		y %= LCD_RES_V;
+		x %= LCD_RES_H;
+		DEBUG_PRINT("X: %d, Y: %d\n", x, y);
+		lcd_clear(0);
+		lcd_draw_string(str, strlen(str), x, y, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+	}
+	// int i, k;
+	// for(i = 311; i < LCD_RES_V; i+=1)
+	// {
+	// 	for(k = 0; k < LCD_RES_H; k++)
+	// 	{
+	// 		lcd_draw_string(str2, strlen(str2), k-( (k>meFont[0]) ? meFont[0] : 0), i, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+	// 		lcd_draw_string(str, strlen(str), k, i, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+	// 		busy_wait_ms(25);
+	// 	}
+	// 	lcd_clear(0);
 	// }
-	// Initialize SD card detection pin
-	gpio_init(SD_DET_PIN);
-	gpio_set_dir(SD_DET_PIN, GPIO_IN);
-	gpio_pull_up(SD_DET_PIN); // Enable pull-up resistor
+	// lcd_draw_char(c, 0, 0, meFont, RGB565(0b11111, 0b000000, 0b11111));
 
-	lcd_init();
-	lcd_clear();
-	int id = lcd_region_create(0, 0, LCD_WIDTH, LCD_HEIGHT);
-	uint16_t name_length = splitter_init(id, max_depth);
-	uint8_t option_count = name_length&UINT8_MAX;
-	name_length >>= 8;
+	// busy_wait_ms(1000);
+	// lcd_scroll(-160);
 
-	bool give_settle_time = false;
-	while(!sd_card_inserted())
-	{
-		set_status_message("No SD card found; please insert SD card");
-		sleep_ms(30);
-		give_settle_time = true;
-		tight_loop_contents();
-	}
-	DEBUG_PRINT("SD card present, continuing...\n");
-	set_status_message("SD card found! | Initing file system...");
-	if(give_settle_time) { sleep_ms(1300); } // Give the user time to properly set the SD card into the slot.
-
-	if(!fs_init())
-	{
-		set_status_message("Error: fs_init failed, rebooting...");
-		sleep_ms(850);
-		watchdog_reboot(0, 0, 0);
-	}
-
-	DIR *root_dir = opendir(root);
-	if(!root_dir)
-	{
-		set_status_message("Root not found");
-		root_dir = opendir(root);
-		sleep_ms(200);
-		if(!root_dir) { watchdog_reboot(0, 0, 0); }
-	}
-	set_status_message("Creating splitter menu...");
-
-	if( setup_entry_structure(0, root_dir, root, max_depth) < 0)
-	{
-		set_status_message("Error: failed to recover entries");
-		sleep_ms(850);
-		watchdog_reboot(0, 0, 0);
-	}
-	set_status_message("Created splitter menu!");
-
-	closedir(root_dir);
-
-	splitter_start();
+	// for(int i = 0; i < 160; i++)
+	// {
+	// 	DEBUG_PRINT("Scrolling 1 line: %d                                                                                         ", i);
+	// 	lcd_scroll(1);
+	// 	busy_wait_ms(1000);
+	// }
 
 	for(;;) { tight_loop_contents(); }
 }

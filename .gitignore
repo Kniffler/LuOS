@@ -21,4 +21,4 @@ build
 PicoCalc
 .cache
 .kateproject.build
-.build.sh.kate-swp
+.cmake

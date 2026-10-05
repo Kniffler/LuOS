@@ -17,10 +17,11 @@ include_directories(
 # I see no point in having these libraries twice in my file structure, thus they are all in src
 add_subdirectory(src/pico-vfs)
 add_subdirectory(src/i2ckbd)
-add_subdirectory(src/lcdspi)
-add_subdirectory(src/splitter)
-add_subdirectory(src/GSM)
-add_subdirectory(src/apps)
+# add_subdirectory(src/lcdspi)
+add_subdirectory(src/buffy)
+# add_subdirectory(src/splitter)
+# add_subdirectory(src/GSM)
+# add_subdirectory(src/apps)
 
 add_executable(${PROJECT_NAME} main.c)
 
@@ -50,15 +51,16 @@ target_link_libraries(${PROJECT_NAME}
 	pico_multicore
 
 	i2ckbd
-	lcdspi
-	splitter
-	GSM
+	# lcdspi
+	buffy
+	# splitter
+	# GSM
 
-	blockdevice_sd
-	filesystem_fat
-	filesystem_vfs
+	# blockdevice_sd
+	# filesystem_fat
+	# filesystem_vfs
 )
-pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
+# pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
