@@ -1,4 +1,5 @@
 #include <hardware/timer.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <pico/stdio.h>
@@ -48,19 +49,21 @@ int main()
 	DEBUG_PRINT_ERR("MESSAGE ERROR TEST\n");
 
 	int rate = lcd_init();
+	uint16_t *lcd_buffer = lcd_buffer_create();
 	DEBUG_PRINT("Inited SPI at %dMhz, while requested at %dMhz\n", rate/(1000*1000), LCD_SPI_FREQ/(1000*1000));
-	lcd_clear(RGB565(0b11111, 0b000000, 0b00000));
+	// lcd_clear(lcd_buffer, RGB565(0b11111, 0b000000, 0b00000));
 	busy_wait_ms(1000);
-	lcd_clear(RGB565(0b00000, 0b000000, 0b11111));
+	// lcd_clear(lcd_buffer, RGB565(0b00000, 0b000000, 0b11111));
+	lcd_refresh(lcd_buffer);
 	busy_wait_ms(1000);
-	lcd_clear(RGB565(0b00000, 0b111111, 0b00000));
+	// lcd_clear(lcd_buffer, RGB565(0b00000, 0b111111, 0b00000));
 	busy_wait_ms(1000);
-	lcd_draw_rect(0, 160, 320, 160, RGB565(0b11111, 0b000000, 0b00000));
-	lcd_draw_rect(0, 320, 320, 160, RGB565(0b11111, 0b000000, 0b11111));
+	// lcd_draw_rect(lcd_buffer, 0, 160, 320, 160, RGB565(0b11111, 0b000000, 0b00000));
+	// lcd_draw_rect(lcd_buffer, 0, 320, 320, 160, RGB565(0b11111, 0b000000, 0b11111));
+	// lcd_refresh(lcd_buffer);
 
-
 	busy_wait_ms(1000);
-	lcd_clear(0);
+	// lcd_clear(lcd_buffer, 0);
 	// lcd_scroll(160);
 	// font_t meFont = (unsigned char*)font1_data;
 	font_t meFont = (unsigned char*)LuOS_System_Font_data;
@@ -69,7 +72,8 @@ int main()
 	// char c = 'B';
 	// lcd_draw_string_on_line(str, strlen(str), 0, 0, meFont, RGB565(0b11111, 0b000000, 0b11111), false);
 	int x = 0, y = 0, c = -1;
-	lcd_draw_string(str, strlen(str), x, y, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+	// lcd_draw_string(lcd_buffer, str, strlen(str), x, y, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+	// lcd_refresh(lcd_buffer);
 	init_i2c_kbd();
 	for(;;)
 	{
@@ -80,15 +84,16 @@ int main()
 			case KEY_UP: y--; break;
 			case KEY_DOWN: y++; break;
 			case KEY_LEFT: x--; break;
-			case KEY_RIGHT: x++; break;C
+			case KEY_RIGHT: x++; break;
 		}
 		if(y<0) { y += LCD_RES_V; }
 		if(x<0) { x += LCD_RES_H; }
 		y %= LCD_RES_V;
 		x %= LCD_RES_H;
 		DEBUG_PRINT("X: %d, Y: %d\n", x, y);
-		lcd_clear(0);
-		lcd_draw_string(str, strlen(str), x, y, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+		// lcd_clear(lcd_buffer, 0);
+		// lcd_draw_string(lcd_buffer, str, strlen(str), x, y, meFont, 3, RGB565(0b11111, 0b000000, 0b11111), 0);
+		// lcd_refresh(lcd_buffer);
 	}
 	// int i, k;
 	// for(i = 311; i < LCD_RES_V; i+=1)
@@ -113,5 +118,6 @@ int main()
 	// 	busy_wait_ms(1000);
 	// }
 
+	// free(lcd_buffer);
 	for(;;) { tight_loop_contents(); }
 }

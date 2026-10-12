@@ -7,9 +7,23 @@
 #include <stdarg.h>
 #include <hardware/spi.h>
 #include <hardware/gpio.h>
+#include "config.h"
 // #include <pico/platform/sections.h>
 
 #define RGB565(red, green, blue) (uint16_t) (((red & 0b11111) << 11) | ((green  & 0b111111) << 5) | (blue & 0b11111))
+
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+#define MEMORY_BUFFER_NEEDED_ARGUMENT \
+uint16_t* lcd_buffer,
+#define MEMORY_BUFFER_NEEDED_ARGUMENT_PASSON \
+lcd_buffer,
+#else
+#define MEMORY_BUFFER_NEEDED_ARGUMENT
+#define MEMORY_BUFFER_NEEDED_ARGUMENT_PASSON
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
+
+#define MBNA MEMORY_BUFFER_NEEDED_ARGUMENT
+#define MBNAP MEMORY_BUFFER_NEEDED_ARGUMENT_PASSON
 
 // Different display commands
 #define LCD_CMD_NOP			(0x00)	// no operation
@@ -85,26 +99,28 @@ static void __not_in_flash_func(normalize_coords)(uint16_t *x1, uint16_t *y1, ui
 
 static void __not_in_flash_func(define_spi_region)(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey);
 
-extern void lcd_scroll(int lines);
+extern void lcd_scroll(MBNA int lines, uint16_t x1, uint16_t x2, uint16_t y1, uint16_t y2);
 
 static int lcd_controller_init(void);
 
-extern int lcd_draw_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour);
-extern int lcd_draw_image(uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height);
+extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour);
+extern int lcd_draw_image(MBNA uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height);
 
-static int lcd_draw_bitmap_partial(uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
-extern int lcd_draw_bitmap(uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
+static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
+extern int lcd_draw_bitmap(MBNA uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
 
 static unsigned char* lcd_get_pointer_for_char_bitmap(unsigned char c, font_t font);
-extern void lcd_draw_string_on_line(unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc);
-extern int lcd_draw_char(char c, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc);
+extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc);
 
 static void lcd_handle_xy_char(uint16_t *x, uint16_t *y, uint16_t x_limit, uint16_t y_limit, font_t font);
 static void lcd_handle_xy_char_reverse(uint16_t *x, uint16_t *y, uint16_t x_limit, uint16_t y_limit, font_t font);
-extern void lcd_draw_string(unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc);
+extern void lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc);
 
 
-extern void lcd_clear(uint16_t colour);
+extern void lcd_clear(MBNA uint16_t colour);
 extern int lcd_init(void);
+
+extern uint16_t* lcd_buffer_create(void);
+extern void lcd_refresh(uint16_t *lcd_buffer);
 
 #endif // __LUOS_BUFFY__

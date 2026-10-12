@@ -19,6 +19,7 @@ CMakeUserPresets.json
 
 build
 PicoCalc
+unused/lcdspi/uthash/
 .cache
 .kateproject.build
 .cmake
