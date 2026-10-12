@@ -6,6 +6,7 @@
 #include <pico/stdlib.h>
 #include <pico/malloc.h>
 #include <hardware/sync.h>
+#include <string.h>
 #include <stdint.h>
 #include <src/include/debug.h>
 
@@ -100,16 +101,40 @@ static void __not_in_flash_func(define_spi_region)(uint16_t x1, uint16_t y1, uin
 	busy_wait_us(1);
 }
 
-extern void lcd_scroll(int lines)
+extern void lcd_scroll(MBNA int lines, uint16_t x1, uint16_t x2, uint16_t y1, uint16_t y2)
 {
+	uint16_t width = x2-x1;
+	uint16_t height = y2-y1;
+
+	if(x1>=x2 || y1>=y2) { DEBUG_PRINT_ERR("Scrolling coordinates are seemingly reversed, (%d>=%d or %d>=%d)\n", x1, x2, y1, y2); return; }
+	if(x1>=LCD_RES_H || x2>=LCD_RES_H || y1>=LCD_RES_V || y2>=LCD_RES_V) { DEBUG_PRINT_ERR("Coordinates out of bounds\n"); return; }
+	if(y1+height+(LCD_RES_V-y2)!=LCD_RES_V) { DEBUG_PRINT_ERR("Sum of Y coordinates does not add up to resolution\n"); return; }
+	if(x1+width+(LCD_RES_H-x2)!=LCD_RES_V) { DEBUG_PRINT_ERR("Sum of Y coordinates does not add up to resolution\n"); return; }
+
 	lines %= LCD_RES_V;
 	if(lines<0) { lines = LCD_RES_V+(lines*(-1)); }
 	lines %= LCD_RES_V;
 
-	// spi_write_full_command(LCD_CMD_VSCRDEF, 6, 0x00, 0x00, 0x01, 0x40, 0x00, 0xA0);
+
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+	lcd_buffer += (LCD_RES_H*y1)+x1;
+
+	for(size_t i = 0; i < lines; i++)
+	{
+		for(size_t k = 0; k < width; k++)
+		{
+			size_t position = (i*(LCD_RES_H-x1))+k;
+			size_t replace = position + (lines*(LCD_RES_H-x1));
+			uint16_t tmp = lcd_buffer[position];
+			lcd_buffer[position] = lcd_buffer[replace];
+			lcd_buffer[replace] = tmp;
+		}
+	}
+#else
+
+	spi_write_full_command(LCD_CMD_VSCRDEF, 6, y1>>8, y1&0xFF, (y2-y1)>>8, (y2-y1)&0xF, (LCD_RES_V-y2)>>8, (LCD_RES_V-y2)&0xF);
 	spi_write_full_command(LCD_CMD_VSCSAD, 2, (lines >> 8), (lines & 0xFF));
-	// spi_write_command(LCD_CMD_RAMWR);
-	// spi_write_command(LCD_CMD_NOP);
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 }
 
 static int lcd_controller_init(void)
@@ -163,15 +188,30 @@ static int lcd_controller_init(void)
 	restore_interrupts(irq);
 	busy_wait_us(10000);
 
-	lcd_clear(0x0000);
+	// lcd_clear(0x0000);
 
 	// Turn on display
 	lcd_display_on();
 	return ret;
 }
 
-extern int lcd_draw_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour)
+extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour)
 {
+	if(x>LCD_RES_H || y>LCD_RES_V) { return 1; }
+	if(x+width>LCD_RES_H || y+height>LCD_RES_V) { return 1; }
+
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+	lcd_buffer += (LCD_RES_H*y)+x;
+
+	for(size_t i = 0; i < height; i++)
+	{
+		for(size_t k = 0; k < width; k++)
+		{
+			size_t position = (i*(LCD_RES_H-x))+k;
+			lcd_buffer[position] = colour;
+		}
+	}
+#else
 	define_spi_region(x, y, x+width-1, y+height-1);
 	uint16_t *line_buffer = (uint16_t*)malloc(sizeof(uint16_t)*width);
 	if(!line_buffer) { return 1; }
@@ -183,10 +223,11 @@ extern int lcd_draw_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height
 
 	restore_interrupts(irq);
 	free(line_buffer);
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 	return 0;
 }
 
-extern int lcd_draw_image(uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height)
+extern int lcd_draw_image(MBNA uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height)
 {
 	if(buf_length != width*height || width == 0 || height == 0) { return 1; }
 
@@ -194,8 +235,20 @@ extern int lcd_draw_image(uint16_t *buffer, size_t buf_length, uint16_t x, uint1
 	spi_write16_colour_buf(buffer, buf_length);
 	return 0;
 }
-static int lcd_draw_bitmap_partial(uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc)
+static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc)
 {
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+	lcd_buffer += (LCD_RES_H*y)+x;
+	for(size_t i = 0; i < height; i++)
+	{
+		for(size_t k = 0; k < width; k++)
+		{
+			size_t passedPixels = ((i*(width+skipXpixelsAfterLine))+k) + ignoreFirstXPixels;
+
+			lcd_buffer[i*(LCD_RES_H)+k] = ( (buffer[passedPixels/8] >> ( (((width+skipXpixelsAfterLine)*height) - passedPixels - 1)%8 )) & 1 ) ? fc : bc;
+		}
+	}
+#else
 	define_spi_region(x, y, x+width-1, y+height-1);
 	uint16_t *line_buffer = (uint16_t*)malloc(sizeof(uint16_t)*width);
 	if(!line_buffer || width == 0 || height == 0) { return 1; }
@@ -205,21 +258,22 @@ static int lcd_draw_bitmap_partial(uint8_t *buffer, size_t ignoreFirstXPixels, s
 	{
 		for(size_t k = 0; k < width; k++)
 		{
-			size_t passedPixels = ((i*(width+skipXbitsAfterLine))+k) + ignoreFirstXPixels;
+			size_t passedPixels = ((i*(width+skipXpixelsAfterLine))+k) + ignoreFirstXPixels;
 			// DEBUG_PRINT("Passed Pixels: %d\n", passedPixels);
 			// DEBUG_PRINT("Drawing byte 0b%08b\n", buffer[passedPixels/8]);
-			line_buffer[k] = ( (buffer[passedPixels/8] >> ( (((width+skipXbitsAfterLine)*height) - passedPixels - 1)%8 )) & 1 ) ? fc : bc;
+			line_buffer[k] = ( (buffer[passedPixels/8] >> ( (((width+skipXpixelsAfterLine)*height) - passedPixels - 1)%8 )) & 1 ) ? fc : bc;
 			// DEBUG_PRINT("Drawing buffer 0x%02X, (i=%d, k=%d)\n", line_buffer[k], i, k);
 		}
 		spi_write16_colour_buf(line_buffer, width);
 	}
 	restore_interrupts(irq);
 	free(line_buffer);
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 	return 0;
 }
-extern int lcd_draw_bitmap(uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc)
+extern int lcd_draw_bitmap(MBNA uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc)
 {
-	return lcd_draw_bitmap_partial(buffer, 0, 0, x, y, width, height, fc, bc);
+	return lcd_draw_bitmap_partial(MBNAP buffer, 0, 0, x, y, width, height, fc, bc);
 }
 
 static unsigned char* lcd_get_pointer_for_char_bitmap(unsigned char c, font_t font)
@@ -227,45 +281,14 @@ static unsigned char* lcd_get_pointer_for_char_bitmap(unsigned char c, font_t fo
 	return font + 4 + (int)( ((c - font[2])*font[0]*font[1])/8 );
 }
 
-extern void lcd_draw_string_on_line(unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc)
-{
-	if(x+(length*font[0])>LCD_RES_H || y+font[1]>LCD_RES_V) { return; }
-
-	define_spi_region(x, y, x+(length*font[0])-1, y+font[1]-1);
-
-	uint8_t font_width = font[0], font_height = font[1];
-
-	size_t buf_length = length*font_width*font_height;
-	uint16_t *line_buffer = malloc(sizeof(uint16_t)*buf_length);
-	if(!line_buffer) { return; }
-
-	for(size_t row = 0; row < font_height; row++)
-	{
-		for(size_t strIndex = 0; strIndex < length; strIndex++)
-		{
-			unsigned char *c = lcd_get_pointer_for_char_bitmap(str[strIndex], font);
-			c += ( row * font_width )/8;
-
-			for(size_t col = 0; col < font_width; col++)
-			{
-				uint8_t shiftVal = 7 - ((row*font_width + col)%8);
-				uint8_t bit = ( (*c) >> shiftVal) & 1;
-				line_buffer[row*length*font_width + strIndex*font_width + col] = (bit) ? fc : bc;
-			}
-		}
-	}
-	spi_write16_colour_buf(line_buffer, buf_length);
-	free(line_buffer);
-}
-
-extern int lcd_draw_char(char c, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc)
+extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc)
 {
 	unsigned char* bitmap = lcd_get_pointer_for_char_bitmap(c, font);
 
 	size_t effective_width = MIN(font[0], LCD_RES_H-x);
 	size_t effective_height = MIN(font[1], LCD_RES_V-y);
 
-	int c1 = lcd_draw_bitmap_partial(bitmap, 0, font[0]-effective_width,
+	int c1 = lcd_draw_bitmap_partial(MBNAP bitmap, 0, font[0]-effective_width,
 									 x, y, effective_width, effective_height, fc, bc);
 	if(c1) { return 1; }
 
@@ -275,7 +298,7 @@ extern int lcd_draw_char(char c, uint16_t x, uint16_t y, font_t font, uint16_t f
 	// The glyph cuts the right edge of the screen.
 	if(effective_width<font[0] && effective_height==font[1])
 	{
-		int c2 = lcd_draw_bitmap_partial(bitmap, effective_width, effective_width,
+		int c2 = lcd_draw_bitmap_partial(MBNAP bitmap, effective_width, effective_width,
 										 0, (y+font[1])%LCD_RES_V, font[0]-effective_width, effective_height, fc, bc);
 		if(c2) { return 1; }
 
@@ -287,7 +310,7 @@ extern int lcd_draw_char(char c, uint16_t x, uint16_t y, font_t font, uint16_t f
 		size_t temp_effective_height = LCD_RES_V - ((y+font[1])%LCD_RES_V);
 		if(temp_effective_height < font[1])
 		{
-			int c6 = lcd_draw_bitmap_partial(bitmap, temp_effective_height*font[0] + effective_width, effective_width,
+			int c6 = lcd_draw_bitmap_partial(MBNAP bitmap, temp_effective_height*font[0] + effective_width, effective_width,
 											 0, 0, font[0]-effective_width, font[1]-temp_effective_height, fc, bc);
 			if(c6) { return 1; }
 
@@ -295,16 +318,16 @@ extern int lcd_draw_char(char c, uint16_t x, uint16_t y, font_t font, uint16_t f
 	// The case we cut the bottom of the screen.
 	} else if(effective_height<font[1] && effective_width==font[0])
 	{
-		int c3 = lcd_draw_bitmap_partial(bitmap, effective_width*effective_height, 0,
+		int c3 = lcd_draw_bitmap_partial(MBNAP bitmap, effective_width*effective_height, 0,
 										 x, 0, effective_width, font[1]-effective_height, fc, bc);
 		if(c3) { return 1; }
 	// The case we cut the bottom right corner of the screen - yes that is different from the case I complained about above.
 	} else
 	{
-		int c4 = lcd_draw_bitmap_partial(bitmap, effective_width, effective_width,
+		int c4 = lcd_draw_bitmap_partial(MBNAP bitmap, effective_width, effective_width,
 										 0, font[1]-effective_height, font[0]-effective_width, font[1], fc, bc);
 
-		int c5 = lcd_draw_bitmap_partial(bitmap, font[0]*effective_height, font[0]-effective_width,
+		int c5 = lcd_draw_bitmap_partial(MBNAP bitmap, font[0]*effective_height, font[0]-effective_width,
 										 x, 0, effective_width, font[1]-effective_height, fc, bc);
 		if(c4||c5) { return 1; }
 	}
@@ -330,7 +353,7 @@ static void lcd_handle_xy_char_reverse(uint16_t *x, uint16_t *y, uint16_t x_limi
 	*x = INA(ox, x_limit)%x_limit;
 	if(ox < 0) { *y = INA(oy, y_limit)%y_limit; }
 }
-extern void lcd_draw_string(unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc)
+extern void lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc)
 {
 	uint16_t cur_x = x, cur_y = y;
 	uint16_t cur_fc = fc, cur_bc = bc;
@@ -340,7 +363,7 @@ extern void lcd_draw_string(unsigned char *str, size_t length, uint16_t x, uint1
 		if(c >= 32 && c <= 126 )
 		{
 			 // On error, preserve the letter and try printing in the next available space.
-			if(lcd_draw_char(c, cur_x, cur_y, font, cur_fc, cur_bc))
+			if(lcd_draw_char(MBNAP c, cur_x, cur_y, font, cur_fc, cur_bc))
 			{ i--; }
 			lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, LCD_RES_V, font);
 			continue;
@@ -359,7 +382,7 @@ extern void lcd_draw_string(unsigned char *str, size_t length, uint16_t x, uint1
 				if(x+(tabsize*font[0])>=LCD_RES_H ) { break; }
 				while(x%tabsize)
 				{
-					lcd_draw_char(' ', cur_x, cur_y, font, cur_fc, cur_bc);
+					lcd_draw_char(MBNAP ' ', cur_x, cur_y, font, cur_fc, cur_bc);
 					lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, LCD_RES_V, font);
 				}
 				break;
@@ -379,13 +402,36 @@ extern void lcd_draw_string(unsigned char *str, size_t length, uint16_t x, uint1
 	}
 }
 
-extern void lcd_clear(uint16_t colour)
+extern void lcd_clear(MBNA uint16_t colour)
 {
-	lcd_draw_rect(0, 0, 320, 320, colour);
+	lcd_draw_rect(MBNAP 0, 0, 320, 320, colour);
 }
 extern int lcd_init(void)
 {
 	int ret = lcd_controller_init();
 	// lcd_clear(0x0000);
 	return ret;
+}
+
+extern uint16_t* lcd_buffer_create(void)
+{
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+	uint16_t* buf = (uint16_t*)calloc(LCD_RES_H*LCD_RES_V, sizeof(uint16_t));
+	DEBUG_ASSERT(buf);
+	return buf;
+#else
+	#warning "Do not create a buffer when the local memory remains unused by the buffy library"
+	return NULL;
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
+}
+
+
+extern void lcd_refresh(uint16_t *lcd_buffer)
+{
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+	define_spi_region(0, 0, LCD_RES_H-1, LCD_RES_V-1);
+	spi_write16_colour_buf(lcd_buffer, LCD_RES_H*LCD_RES_V);
+#else
+#warning "Do not call lcd_refresh when not using local memory "
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 }

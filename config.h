@@ -15,6 +15,7 @@
 #define SD_CS_PIN		17
 #define SD_DET_PIN 		22
 
+// LCD settings
 #define LCD_SPI1		1
 #define LCD_SCK_PIN		10
 #define LCD_MOSI_PIN	11
@@ -23,17 +24,16 @@
 #define LCD_DC_PIN		14
 #define LCD_RST_PIN		15
 
+// #define BUFFY_USE_LOCAL_MEMORY_BUFFER 1
+#define per_pixel_filter(px, x, y) (px)
+
 // GPIOs for audio output
 #define AUDIO_LEFT		28
 #define AUDIO_RIGHT		27
 
-// GPIOs for buttons
-#define NEXT_BUTTON		2
-#define PART_BUTTON		3
-
 // Pico-internal GPIOs
-#define PICO_PS			23
-#define LED_PIN			25
+// #define PICO_PS			23
+// #define LED_PIN			25
 
 // PicoCalc SD Firmware Loader 
 // SD_BOOT_FLASH_OFFSET is the offset in flash memory where the bootloader starts
@@ -45,9 +45,5 @@
 // Maximum size of the application that can be loaded
 // This ensures we don't overwrite the bootloader itself
 #define MAX_APP_SIZE				(PICO_FLASH_SIZE_BYTES - SD_BOOT_FLASH_OFFSET)
-
-
-// Splitter interface
-#define SPLITTER_CENTER_EACH_ENTRY 1
 
 #endif // CONFIG_H

@@ -17,8 +17,8 @@ include_directories(
 # I see no point in having these libraries twice in my file structure, thus they are all in src
 add_subdirectory(src/pico-vfs)
 add_subdirectory(src/i2ckbd)
-# add_subdirectory(src/lcdspi)
 add_subdirectory(src/buffy)
+# add_subdirectory(src/lcdspi)
 # add_subdirectory(src/splitter)
 # add_subdirectory(src/GSM)
 # add_subdirectory(src/apps)
