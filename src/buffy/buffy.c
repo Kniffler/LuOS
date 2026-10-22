@@ -54,6 +54,20 @@ static void spi_write_full_command(uint8_t cmd, int argc, ...)
 	va_end(args);
 }
 
+extern void lcd_display_show_top(void)
+{
+	uint32_t irq = save_and_disable_interrupts();
+	spi_write_command(LCD_CMD_NORON);
+	restore_interrupts(irq);
+}
+extern void lcd_display_show_bot(void)
+{
+	uint32_t irq = save_and_disable_interrupts();
+	spi_write_full_command(LCD_CMD_PTLAR, 4, ((LCD_MEM_HEIGHT-LCD_RES_V)>>8), (LCD_MEM_HEIGHT-LCD_RES_V)&0xFF, LCD_MEM_HEIGHT>>8, LCD_MEM_HEIGHT&0xFF);
+	restore_interrupts(irq);
+}
+
+
 extern void lcd_display_on(void)
 {
 	uint32_t irq = save_and_disable_interrupts();
@@ -77,16 +91,10 @@ extern void lcd_reset(void)
 
 static void __not_in_flash_func(normalize_coords)(uint16_t *x1, uint16_t *y1, uint16_t *x2, uint16_t *y2)
 {
-	// uint16_t x_over1 = (*x1)/LCD_RES_H, y_over1 = (*y1)/LCD_MEM_HEIGHT;
-	// uint16_t x_over2 = (*x2)/LCD_RES_H, y_over2 = (*y2)/LCD_MEM_HEIGHT;
 	*x1 %= LCD_RES_H;
 	*y1 %= LCD_MEM_HEIGHT;
 	*x2 %= LCD_RES_H;
 	*y2 %= LCD_MEM_HEIGHT;
-	// if(x_over1) { (*y1) = x_over1; }
-	// if(x_over2) { (*y2) = x_over2; }
-	// if(y_over1) { (*y1) = y_over1; }
-	// if(y_over2) { (*y2) = y_over2; }
 }
 
 static void __not_in_flash_func(define_spi_region)(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
@@ -188,17 +196,27 @@ static int lcd_controller_init(void)
 	restore_interrupts(irq);
 	busy_wait_us(10000);
 
-	// lcd_clear(0x0000);
+	lcd_display_show_top();
 
 	// Turn on display
 	lcd_display_on();
 	return ret;
 }
 
+extern int lcd_draw_1px(MBNA uint16_t x, uint16_t y, uint16_t colour)
+{
+#ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
+	lcd_buffer[y*LCD_RES_H + x] = colour;
+#else
+	define_spi_region(x, y, x, y);
+	spi_write16_colour1px(colour);
+#endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
+}
+
 extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour)
 {
-	if(x>LCD_RES_H || y>LCD_RES_V) { return 1; }
-	if(x+width>LCD_RES_H || y+height>LCD_RES_V) { return 1; }
+	if(x>LCD_RES_H || y>LCD_MEM_HEIGHT) { return 1; }
+	if(x+width>LCD_RES_H || y+height>LCD_MEM_HEIGHT) { return 1; }
 
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
 	lcd_buffer += (LCD_RES_H*y)+x;
@@ -404,7 +422,7 @@ extern void lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, 
 
 extern void lcd_clear(MBNA uint16_t colour)
 {
-	lcd_draw_rect(MBNAP 0, 0, 320, 320, colour);
+	lcd_draw_rect(MBNAP 0, 0, LCD_RES_H, LCD_MEM_HEIGHT, colour);
 }
 extern int lcd_init(void)
 {
@@ -416,11 +434,11 @@ extern int lcd_init(void)
 extern uint16_t* lcd_buffer_create(void)
 {
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
-	uint16_t* buf = (uint16_t*)calloc(LCD_RES_H*LCD_RES_V, sizeof(uint16_t));
+	uint16_t* buf = (uint16_t*)calloc(LCD_RES_H*LCD_MEM_HEIGHT, sizeof(uint16_t));
 	DEBUG_ASSERT(buf);
 	return buf;
 #else
-	#warning "Do not create a buffer when the local memory remains unused by the buffy library"
+	#warning Do not create a buffer when the local memory remains unused by the buffy library.
 	return NULL;
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 }
@@ -429,9 +447,9 @@ extern uint16_t* lcd_buffer_create(void)
 extern void lcd_refresh(uint16_t *lcd_buffer)
 {
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
-	define_spi_region(0, 0, LCD_RES_H-1, LCD_RES_V-1);
-	spi_write16_colour_buf(lcd_buffer, LCD_RES_H*LCD_RES_V);
+	define_spi_region(0, 0, LCD_RES_H-1, LCD_MEM_HEIGHT-1);
+	spi_write16_colour_buf(lcd_buffer, LCD_RES_H*LCD_MEM_HEIGHT);
 #else
-#warning "Do not call lcd_refresh when not using local memory "
+#warning Do not call lcd_refresh when not using local memory.
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 }

@@ -23,7 +23,7 @@ add_subdirectory(src/buffy)
 # add_subdirectory(src/GSM)
 # add_subdirectory(src/apps)
 
-add_executable(${PROJECT_NAME} main.c)
+add_executable(${PROJECT_NAME} main.c ui.c)
 
 add_compile_options(-Wall
 	# -Wno-format

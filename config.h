@@ -25,7 +25,10 @@
 #define LCD_RST_PIN		15
 
 // #define BUFFY_USE_LOCAL_MEMORY_BUFFER 1
+// #define UI_CHARACTER_MEMORY_ENABLE 1
+
 #define per_pixel_filter(px, x, y) (px)
+
 
 // GPIOs for audio output
 #define AUDIO_LEFT		28
