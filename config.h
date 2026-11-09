@@ -1,5 +1,5 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef __LUOS_CONFIG__
+#define __LUOS_CONFIG__
 
 // Comment out to turn of debug messages sent over stdout
 #define USE_DEBUG 1
@@ -24,8 +24,7 @@
 #define LCD_DC_PIN		14
 #define LCD_RST_PIN		15
 
-// #define BUFFY_USE_LOCAL_MEMORY_BUFFER 1
-// #define UI_CHARACTER_MEMORY_ENABLE 1
+#define BUFFY_USE_LOCAL_MEMORY_BUFFER 1
 
 #define per_pixel_filter(px, x, y) (px)
 
@@ -34,19 +33,5 @@
 #define AUDIO_LEFT		28
 #define AUDIO_RIGHT		27
 
-// Pico-internal GPIOs
-// #define PICO_PS			23
-// #define LED_PIN			25
 
-// PicoCalc SD Firmware Loader 
-// SD_BOOT_FLASH_OFFSET is the offset in flash memory where the bootloader starts
-// This is typically set to 256KB for the Raspberry Pi Pico
-// This offset is used to ensure that the bootloader does not get overwritten
-// when loading a new application from the SD card
-#define SD_BOOT_FLASH_OFFSET			(256 * 1024)
-
-// Maximum size of the application that can be loaded
-// This ensures we don't overwrite the bootloader itself
-#define MAX_APP_SIZE				(PICO_FLASH_SIZE_BYTES - SD_BOOT_FLASH_OFFSET)
-
-#endif // CONFIG_H
+#endif // __LUOS_CONFIG__

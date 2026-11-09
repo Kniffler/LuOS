@@ -117,11 +117,11 @@ static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixe
 extern int lcd_draw_bitmap(MBNA uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
 
 static unsigned char* lcd_get_pointer_for_char_bitmap(unsigned char c, font_t font);
-extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc);
+extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint16_t fc, uint16_t bc);
 
 static void lcd_handle_xy_char(uint16_t *x, uint16_t *y, uint16_t x_limit, uint16_t y_limit, font_t font);
 static void lcd_handle_xy_char_reverse(uint16_t *x, uint16_t *y, uint16_t x_limit, uint16_t y_limit, font_t font);
-extern void lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc);
+extern size_t lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc, bool *invert);
 
 
 extern void lcd_clear(MBNA uint16_t colour);

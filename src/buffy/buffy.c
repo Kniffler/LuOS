@@ -64,6 +64,7 @@ extern void lcd_display_show_bot(void)
 {
 	uint32_t irq = save_and_disable_interrupts();
 	spi_write_full_command(LCD_CMD_PTLAR, 4, ((LCD_MEM_HEIGHT-LCD_RES_V)>>8), (LCD_MEM_HEIGHT-LCD_RES_V)&0xFF, LCD_MEM_HEIGHT>>8, LCD_MEM_HEIGHT&0xFF);
+	spi_write_command(LCD_CMD_PTLON);
 	restore_interrupts(irq);
 }
 
@@ -139,7 +140,6 @@ extern void lcd_scroll(MBNA int lines, uint16_t x1, uint16_t x2, uint16_t y1, ui
 		}
 	}
 #else
-
 	spi_write_full_command(LCD_CMD_VSCRDEF, 6, y1>>8, y1&0xFF, (y2-y1)>>8, (y2-y1)&0xF, (LCD_RES_V-y2)>>8, (LCD_RES_V-y2)&0xF);
 	spi_write_full_command(LCD_CMD_VSCSAD, 2, (lines >> 8), (lines & 0xFF));
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
@@ -211,12 +211,13 @@ extern int lcd_draw_1px(MBNA uint16_t x, uint16_t y, uint16_t colour)
 	define_spi_region(x, y, x, y);
 	spi_write16_colour1px(colour);
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
+	return LUOS_SUCCESS;
 }
 
 extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour)
 {
-	if(x>LCD_RES_H || y>LCD_MEM_HEIGHT) { return 1; }
-	if(x+width>LCD_RES_H || y+height>LCD_MEM_HEIGHT) { return 1; }
+	if(x>LCD_RES_H || y>LCD_MEM_HEIGHT) { return LUOS_ERROR_BOUNDS; }
+	if(x+width>LCD_RES_H || y+height>LCD_MEM_HEIGHT) { return LUOS_ERROR_BOUNDS; }
 
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
 	lcd_buffer += (LCD_RES_H*y)+x;
@@ -232,7 +233,7 @@ extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t h
 #else
 	define_spi_region(x, y, x+width-1, y+height-1);
 	uint16_t *line_buffer = (uint16_t*)malloc(sizeof(uint16_t)*width);
-	if(!line_buffer) { return 1; }
+	if(!line_buffer) { return LUOS_ERROR_MEM; }
 
 	for(size_t i = 0; i < width;  i++) { line_buffer[i] = colour; }
 
@@ -242,19 +243,20 @@ extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t h
 	restore_interrupts(irq);
 	free(line_buffer);
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
-	return 0;
+	return LUOS_SUCCESS;
 }
 
 extern int lcd_draw_image(MBNA uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height)
 {
-	if(buf_length != width*height || width == 0 || height == 0) { return 1; }
+	if(buf_length != width*height || width == 0 || height == 0) { return LUOS_ERROR_BOUNDS; }
 
 	define_spi_region(x, y, x+width-1, y+height-1);
 	spi_write16_colour_buf(buffer, buf_length);
-	return 0;
+	return LUOS_SUCCESS;
 }
 static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc)
 {
+	if(width == 0 || height == 0) { return LUOS_ERROR_BOUNDS; }
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
 	lcd_buffer += (LCD_RES_H*y)+x;
 	for(size_t i = 0; i < height; i++)
@@ -269,7 +271,7 @@ static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixe
 #else
 	define_spi_region(x, y, x+width-1, y+height-1);
 	uint16_t *line_buffer = (uint16_t*)malloc(sizeof(uint16_t)*width);
-	if(!line_buffer || width == 0 || height == 0) { return 1; }
+	if(!line_buffer) { return LUOS_ERROR_MEM; }
 
 	uint32_t irq = save_and_disable_interrupts();
 	for(size_t i = 0; i < height; i++)
@@ -287,7 +289,7 @@ static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixe
 	restore_interrupts(irq);
 	free(line_buffer);
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
-	return 0;
+	return LUOS_SUCCESS;
 }
 extern int lcd_draw_bitmap(MBNA uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc)
 {
@@ -299,12 +301,12 @@ static unsigned char* lcd_get_pointer_for_char_bitmap(unsigned char c, font_t fo
 	return font + 4 + (int)( ((c - font[2])*font[0]*font[1])/8 );
 }
 
-extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, font_t font, uint16_t fc, uint16_t bc)
+extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint16_t fc, uint16_t bc)
 {
 	unsigned char* bitmap = lcd_get_pointer_for_char_bitmap(c, font);
 
 	size_t effective_width = MIN(font[0], LCD_RES_H-x);
-	size_t effective_height = MIN(font[1], LCD_RES_V-y);
+	size_t effective_height = MIN(font[1], cutoff_y-y);
 
 	int c1 = lcd_draw_bitmap_partial(MBNAP bitmap, 0, font[0]-effective_width,
 									 x, y, effective_width, effective_height, fc, bc);
@@ -317,15 +319,15 @@ extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, font_t font, uint1
 	if(effective_width<font[0] && effective_height==font[1])
 	{
 		int c2 = lcd_draw_bitmap_partial(MBNAP bitmap, effective_width, effective_width,
-										 0, (y+font[1])%LCD_RES_V, font[0]-effective_width, effective_height, fc, bc);
+										 0, (y+font[1])%cutoff_y, font[0]-effective_width, effective_height, fc, bc);
 		if(c2) { return 1; }
 
 		/* I do NOT wanna talk about this case nor the headaches it gave me.
-		 * 	This is the scenario in which we cute the right screen edge, but once we loop
+		 * 	This is the scenario in which we cut the right screen edge, but once we loop
 		 * the glyph around, we also cut the bottom and so we have to print back at the top.
 		 * I hate this.
 		 */
-		size_t temp_effective_height = LCD_RES_V - ((y+font[1])%LCD_RES_V);
+		size_t temp_effective_height = cutoff_y - ((y+font[1])%cutoff_y);
 		if(temp_effective_height < font[1])
 		{
 			int c6 = lcd_draw_bitmap_partial(MBNAP bitmap, temp_effective_height*font[0] + effective_width, effective_width,
@@ -371,27 +373,30 @@ static void lcd_handle_xy_char_reverse(uint16_t *x, uint16_t *y, uint16_t x_limi
 	*x = INA(ox, x_limit)%x_limit;
 	if(ox < 0) { *y = INA(oy, y_limit)%y_limit; }
 }
-extern void lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc)
+extern size_t lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc, bool *invert)
 {
+	size_t printedChars = 0;
 	uint16_t cur_x = x, cur_y = y;
-	uint16_t cur_fc = fc, cur_bc = bc;
+	uint16_t cur_fc = (*invert) ? bc : fc;
+	uint16_t cur_bc = (*invert) ? fc : bc;
 	for(size_t i = 0; i < length; i++)
 	{
 		unsigned char c = str[i];
 		if(c >= 32 && c <= 126 )
 		{
 			 // On error, preserve the letter and try printing in the next available space.
-			if(lcd_draw_char(MBNAP c, cur_x, cur_y, font, cur_fc, cur_bc))
+			if(lcd_draw_char(MBNAP c, cur_x, cur_y, cutoff_y, font, cur_fc, cur_bc))
 			{ i--; }
-			lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, LCD_RES_V, font);
+			printedChars++;
+			lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, cutoff_y, font);
 			continue;
 		}
 		switch(c)
 		{
-			case '\0': return; break;
+			case '\0': return printedChars; break;
 			case '\n':
 				cur_x = LCD_RES_H;
-				lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, LCD_RES_V, font);
+				lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, cutoff_y, font);
 				break;
 			case '\r':
 				cur_x = 0;
@@ -400,24 +405,29 @@ extern void lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, 
 				if(x+(tabsize*font[0])>=LCD_RES_H ) { break; }
 				while(x%tabsize)
 				{
-					lcd_draw_char(MBNAP ' ', cur_x, cur_y, font, cur_fc, cur_bc);
-					lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, LCD_RES_V, font);
+					lcd_draw_char(MBNAP ' ', cur_x, cur_y, cutoff_y, font, cur_fc, cur_bc);
+					printedChars++;
+					lcd_handle_xy_char(&cur_x, &cur_y, LCD_RES_H, cutoff_y, font);
 				}
 				break;
 			case '\b':
-				lcd_handle_xy_char_reverse(&cur_x, &cur_y, LCD_RES_H, LCD_RES_V, font);
+				lcd_handle_xy_char_reverse(&cur_x, &cur_y, LCD_RES_H, cutoff_y, font);
+				printedChars--;
 				break;
 			case '\017':
 				cur_fc = bc;
 				cur_bc = fc;
+				*invert = true;
 				break;
 			case '\016':
 				cur_fc = fc;
 				cur_bc = bc;
+				*invert = false;
 				break;
 			default: continue; break;
 		}
 	}
+	return printedChars;
 }
 
 extern void lcd_clear(MBNA uint16_t colour)
@@ -436,6 +446,7 @@ extern uint16_t* lcd_buffer_create(void)
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
 	uint16_t* buf = (uint16_t*)calloc(LCD_RES_H*LCD_MEM_HEIGHT, sizeof(uint16_t));
 	DEBUG_ASSERT(buf);
+	lcd_refresh(buf);
 	return buf;
 #else
 	#warning Do not create a buffer when the local memory remains unused by the buffy library.
