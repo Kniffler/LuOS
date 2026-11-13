@@ -52,7 +52,7 @@ int main()
 	DEBUG_PRINT_ERR("MESSAGE ERROR TEST\n");
 
 	int rate = lcd_init();
-	uint16_t *lcd_buffer = lcd_buffer_create();
+	// uint16_t *lcd_buffer = lcd_buffer_create();
 	DEBUG_PRINT("Inited SPI at %dMhz, while requested at %dMhz\n", rate/(1000*1000), LCD_SPI_FREQ/(1000*1000));
 
 
@@ -61,16 +61,17 @@ int main()
 	AGrid_t grid;
 	grid.font = meFont;
 	grid.tabsize = 3;
-	grid.foreground = RGB565(255, 255, 255);
+	grid.foreground = ORANGE;
 	grid.background = 0;
 	grid.demo_glyph = 255;
 	grid.index_offset = 0;
 	grid.pixel_offset_x = 0;
 	grid.pixel_offset_y = 0;
 	grid.glyph_count_horizontal = LCD_RES_H/meFont[0];
-	grid.glyph_count_vertical = LCD_RES_V/meFont[1];
+	grid.glyph_count_vertical = LCD_MEM_HEIGHT/meFont[1];
 
-	DEBUG_PRINT("Allowing for %d horizontal glyps and %d vertical ones\n", grid.glyph_count_horizontal, grid.glyph_count_vertical);
-	enter_ui_index_tester(lcd_buffer, &grid, 1, 1);
+	DEBUG_PRINT("Allowing for %d horizontal glyphs and %d vertical ones\n", grid.glyph_count_horizontal, grid.glyph_count_vertical);
+	// suite_ui_index(lcd_buffer, &grid, 1, 1);
+	suite_ui_index(&grid, 1, 1);
 	for(;;) { tight_loop_contents(); }
 }

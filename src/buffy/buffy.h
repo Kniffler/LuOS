@@ -84,6 +84,16 @@ lcd_buffer,
 #define LCD_RES_H 320
 #define LCD_MEM_HEIGHT 480
 
+
+#define BLACK	RGB565(0, 0, 0)
+#define WHITE	RGB565(0b11111, 0b111111, 0b11111)
+#define RED		RGB565(0b11111, 0, 0)
+#define GREEN	RGB565(0, 0b111111, 0)
+#define BLUE	RGB565(0, 0, 0b11111)
+#define YELLOW	RGB565(0b11111, 0b111111, 0)
+#define VIOLET	RGB565(0b11111, 0, 0b11111)
+#define ORANGE	RGB565(0b11111, 0b100101, 0)
+
 typedef unsigned char* font_t;
 
 static void raise_dc(void);

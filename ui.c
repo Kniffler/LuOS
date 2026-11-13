@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "buffy.h"
+#include "config.h"
 #include "src/include/debug.h"
 #include <stdint.h>
 
@@ -30,7 +31,7 @@ static size_t printable_enumerate(unsigned char *str, size_t norm_length)
 
 extern void ui_print_char(MBNA AGrid_t *grid, uint16_t index, unsigned char c, bool invert)
 {
-	DEBUG_PRINT("c: %c\n", c);
+	// DEBUG_PRINT("c: %c\n", c);
 	index -= grid->index_offset;
 	point_t draw_point = grid_index_to_pixel_coord(grid, index);
 	lcd_draw_char(MBNAP c, draw_point.x, draw_point.y, MIN(grid->glyph_count_vertical*grid->font[1], LCD_MEM_HEIGHT), grid->font,
@@ -42,13 +43,13 @@ extern void ui_print_string(MBNA AGrid_t *grid, uint16_t index, unsigned char *s
 	index -= grid->index_offset;
 	size_t max = grid->glyph_count_horizontal*grid->glyph_count_vertical;
 
-	index %= max;
 	// size_t print_length = printable_enumerate(str, len);
 	// print_length %= max;
 	bool invert = false;
 
 	for(size_t i = 0; i < len; i++)
 	{
+		index %= max;
 		unsigned char c = str[i];
 		switch(c)
 		{
@@ -129,7 +130,13 @@ extern void ui_update_status(MBNA AGrid_t *grid, unsigned char *status_text)
 	ui_print_string(MBNAP grid, 0, status_text, strlen(status_text));
 	ui_print_horizontal_line(MBNAP grid, 1, '-');
 }
-extern int ui_terminal_print(MBNA AGrid_t *grid, unsigned char *string, ...)
+
+
+static size_t ui_terminal_print_singular(MBNA AGrid_t *grid, unsigned char *string)
+{
+
+}
+extern int ui_terminal_print(MBNA AGrid_t *grid, unsigned char *string)
 {
 	static uint8_t screenline_occupancy = 0;
 	static uint8_t indecie_stack[256] = {0};
@@ -137,5 +144,8 @@ extern int ui_terminal_print(MBNA AGrid_t *grid, unsigned char *string, ...)
 }
 extern void ui_terminal_query(MBNA AGrid_t *grid, unsigned char *input, size_t input_max, size_t line)
 {
-	return; // TODO: allothis
+	static unsigned char cmd_history[UI_TERM_COMMAND_HISTORY_LENGTH][UI_TERM_MAX_COMMAND_SIZE];
+	static size_t history_write_index = 0;
+	static int history_direction = +1;
+	return;
 }

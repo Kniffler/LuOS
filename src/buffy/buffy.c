@@ -63,8 +63,24 @@ extern void lcd_display_show_top(void)
 extern void lcd_display_show_bot(void)
 {
 	uint32_t irq = save_and_disable_interrupts();
-	spi_write_full_command(LCD_CMD_PTLAR, 4, ((LCD_MEM_HEIGHT-LCD_RES_V)>>8), (LCD_MEM_HEIGHT-LCD_RES_V)&0xFF, LCD_MEM_HEIGHT>>8, LCD_MEM_HEIGHT&0xFF);
-	spi_write_command(LCD_CMD_PTLON);
+
+#define LCD_BOT_START_ROW ((LCD_MEM_HEIGHT-LCD_RES_V)) // Evaluates to 160
+
+	// spi_write_command(LCD_CMD_DISPOFF);
+
+	// Sequence should evaluate to this
+	// Dec:          48         (   160   )           (   479   )
+	// Hex:        0x30       0x00       0xA0       0x01       0xDF
+	// Bin:   0011'0000  0000'0000  1010'0000  0000'0001  1101'1111
+
+	// DEBUG_PRINT("I am sick of this, here's the damn sequence: %X %X %X %X %X", LCD_CMD_PTLAR, ((LCD_BOT_START_ROW)>>8)&0xFF, (LCD_BOT_START_ROW)&0xFF, ((LCD_MEM_HEIGHT-1)>>8)&0xFF, (LCD_MEM_HEIGHT-1)&0xFF);
+	// spi_write_full_command(LCD_CMD_PTLAR, 4, ((LCD_BOT_START_ROW)>>8)&0xFF, (LCD_BOT_START_ROW)&0xFF, ((LCD_MEM_HEIGHT-1)>>8)&0xFF, (LCD_MEM_HEIGHT-1)&0xFF);
+	// spi_write_full_command(LCD_CMD_PTLAR, 4, ((LCD_BOT_START_ROW)>>8)&0xFF, (LCD_BOT_START_ROW)&0xFF, 0, 0);
+	// spi_write_command(LCD_CMD_PTLON);
+
+	// spi_write_command(LCD_CMD_DISPON);
+	lcd_scroll(160, 0, LCD_RES_H, 0, LCD_MEM_HEIGHT);
+
 	restore_interrupts(irq);
 }
 
@@ -116,13 +132,13 @@ extern void lcd_scroll(MBNA int lines, uint16_t x1, uint16_t x2, uint16_t y1, ui
 	uint16_t height = y2-y1;
 
 	if(x1>=x2 || y1>=y2) { DEBUG_PRINT_ERR("Scrolling coordinates are seemingly reversed, (%d>=%d or %d>=%d)\n", x1, x2, y1, y2); return; }
-	if(x1>=LCD_RES_H || x2>=LCD_RES_H || y1>=LCD_RES_V || y2>=LCD_RES_V) { DEBUG_PRINT_ERR("Coordinates out of bounds\n"); return; }
-	if(y1+height+(LCD_RES_V-y2)!=LCD_RES_V) { DEBUG_PRINT_ERR("Sum of Y coordinates does not add up to resolution\n"); return; }
-	if(x1+width+(LCD_RES_H-x2)!=LCD_RES_V) { DEBUG_PRINT_ERR("Sum of Y coordinates does not add up to resolution\n"); return; }
+	if(x1>LCD_RES_H || x2>LCD_RES_H || y1>LCD_MEM_HEIGHT || y2>LCD_MEM_HEIGHT) { DEBUG_PRINT_ERR("Coordinates out of bounds\n"); return; }
+	if(y1+height+(LCD_MEM_HEIGHT-y2)!=LCD_MEM_HEIGHT) { DEBUG_PRINT_ERR("Sum of Y coordinates does not add up to resolution\n"); return; }
+	// if(x1+width+(LCD_RES_H-x2)!=LCD_MEM_HEIGHT) { DEBUG_PRINT_ERR("Sum of Y coordinates does not add up to resolution\n"); return; }
 
-	lines %= LCD_RES_V;
-	if(lines<0) { lines = LCD_RES_V+(lines*(-1)); }
-	lines %= LCD_RES_V;
+	lines %= LCD_MEM_HEIGHT;
+	if(lines<0) { lines = LCD_MEM_HEIGHT+(lines*(-1)); }
+	lines %= LCD_MEM_HEIGHT;
 
 
 #ifdef BUFFY_USE_LOCAL_MEMORY_BUFFER
@@ -140,7 +156,7 @@ extern void lcd_scroll(MBNA int lines, uint16_t x1, uint16_t x2, uint16_t y1, ui
 		}
 	}
 #else
-	spi_write_full_command(LCD_CMD_VSCRDEF, 6, y1>>8, y1&0xFF, (y2-y1)>>8, (y2-y1)&0xF, (LCD_RES_V-y2)>>8, (LCD_RES_V-y2)&0xF);
+	spi_write_full_command(LCD_CMD_VSCRDEF, 6, y1>>8, y1&0xFF, (y2-y1)>>8, (y2-y1)&0xF, (LCD_MEM_HEIGHT-y2)>>8, (LCD_MEM_HEIGHT-y2)&0xF);
 	spi_write_full_command(LCD_CMD_VSCSAD, 2, (lines >> 8), (lines & 0xFF));
 #endif // BUFFY_USE_LOCAL_MEMORY_BUFFER
 }
@@ -187,7 +203,7 @@ static int lcd_controller_init(void)
 	spi_write_full_command(LCD_CMD_EMS, 3, 0xC6, 0xE9, 0x00);
 
 	// Vertical scroll definition
-	spi_write_full_command(LCD_CMD_VSCRDEF, 6, 0x00, 0x00, 0x01, 0xE0, 0x00, 0x00);
+	// spi_write_full_command(LCD_CMD_VSCRDEF, 6, 0x00, 0x00, 0x01, 0xE0, 0x00, 0x00);
 	// spi_write_full_command(LCD_CMD_VSCRDEF, 6, 0x00, 0x00, 0x01, 0x40, 0x00, 0xA0);
 
 	// Sleep out
@@ -216,6 +232,7 @@ extern int lcd_draw_1px(MBNA uint16_t x, uint16_t y, uint16_t colour)
 
 extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour)
 {
+	if(width == 0 || height == 0) { return LUOS_ERROR_BOUNDS; }
 	if(x>LCD_RES_H || y>LCD_MEM_HEIGHT) { return LUOS_ERROR_BOUNDS; }
 	if(x+width>LCD_RES_H || y+height>LCD_MEM_HEIGHT) { return LUOS_ERROR_BOUNDS; }
 
@@ -432,7 +449,8 @@ extern size_t lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x
 
 extern void lcd_clear(MBNA uint16_t colour)
 {
-	lcd_draw_rect(MBNAP 0, 0, LCD_RES_H, LCD_MEM_HEIGHT, colour);
+	int err = lcd_draw_rect(MBNAP 0, 0, LCD_RES_H, LCD_MEM_HEIGHT, colour);
+	DEBUG_PRINT_ERR("Error for clear: %d\n", err);
 }
 extern int lcd_init(void)
 {

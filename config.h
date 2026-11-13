@@ -24,10 +24,12 @@
 #define LCD_DC_PIN		14
 #define LCD_RST_PIN		15
 
-#define BUFFY_USE_LOCAL_MEMORY_BUFFER 1
+// #define BUFFY_USE_LOCAL_MEMORY_BUFFER 1
 
 #define per_pixel_filter(px, x, y) (px)
 
+#define UI_TERM_COMMAND_HISTORY_LENGTH	32
+#define UI_TERM_MAX_COMMAND_SIZE		64
 
 // GPIOs for audio output
 #define AUDIO_LEFT		28
