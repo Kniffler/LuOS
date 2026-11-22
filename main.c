@@ -38,11 +38,11 @@ int main()
 	}
 #endif
 #ifdef WAIT_ON_FIRST_KBD_INPUT
-	init_i2c_kbd();
+	kbd_Init();
 	for(;;)
 	{
 		DEBUG_PRINT("PRESS ANY KEY ON KEYBOARD TO START DEVICE\n");
-		int c = read_i2c_kbd();
+		int c = kbd_Read();
 		busy_wait_ms(50);
 		if(c!=-1) { break; }
 	}
@@ -51,8 +51,8 @@ int main()
 	DEBUG_PRINT("Program started\n");
 	DEBUG_PRINT_ERR("MESSAGE ERROR TEST\n");
 
-	int rate = lcd_init();
-	// uint16_t *lcd_buffer = lcd_buffer_create();
+	int rate = lcd_Init();
+	// uint16_t *lcd_buffer = lcd_BufferCreate();
 	DEBUG_PRINT("Inited SPI at %dMhz, while requested at %dMhz\n", rate/(1000*1000), LCD_SPI_FREQ/(1000*1000));
 
 
@@ -65,13 +65,13 @@ int main()
 	grid.background = 0;
 	grid.demo_glyph = 255;
 	grid.index_offset = 0;
-	grid.pixel_offset_x = 0;
-	grid.pixel_offset_y = 0;
+	grid.pixelOffsetX = 0;
+	grid.pixelOffsetY = 0;
 	grid.glyph_count_horizontal = LCD_RES_H/meFont[0];
 	grid.glyph_count_vertical = LCD_MEM_HEIGHT/meFont[1];
 
 	DEBUG_PRINT("Allowing for %d horizontal glyphs and %d vertical ones\n", grid.glyph_count_horizontal, grid.glyph_count_vertical);
 	// suite_ui_index(lcd_buffer, &grid, 1, 1);
-	suite_ui_index(&grid, 1, 1);
+	suite_TestGrid(&grid, 1, 1);
 	for(;;) { tight_loop_contents(); }
 }

@@ -7,7 +7,7 @@
 
 static uint8_t i2c_inited = 0;
 
-void init_i2c_kbd() {
+void kbd_Init() {
 	gpio_set_function(I2C_KBD_SCL, GPIO_FUNC_I2C);
 	gpio_set_function(I2C_KBD_SDA, GPIO_FUNC_I2C);
 	i2c_init(I2C_KBD_MOD, I2C_KBD_SPEED);
@@ -17,7 +17,7 @@ void init_i2c_kbd() {
 	i2c_inited = 1;
 }
 
-int read_i2c_kbd() {
+int kbd_Read() {
 	int retval;
 	static int ctrlheld = 0;
 	uint16_t buff = 0;
@@ -60,7 +60,7 @@ int read_i2c_kbd() {
 	return -1;
 }
 
-int read_battery() {
+int kbd_Battery() {
 	int retval;
 	uint16_t buff = 0;
 	unsigned char msg[2];

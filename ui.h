@@ -23,38 +23,36 @@ typedef struct ASCII_Grid {
 	unsigned char demo_glyph;
 	uint16_t glyph_count_horizontal;
 	uint16_t glyph_count_vertical;
-	uint16_t pixel_offset_x;
-	uint16_t pixel_offset_y;
+	uint16_t pixelOffsetX;
+	uint16_t pixelOffsetY;
 	int16_t index_offset;
 
 } AGrid_t;
 
-typedef struct PrintItem {
-	unsigned char *content;
-	size_t content_length;
+typedef struct TerminalInstance {
 
-} PrintItem_t;
+} Terminal_t;
 // Clarification: coordinates refer to pixels and indecies refer to an index into the grid.x and grid.y
 
-static point_t grid_index_to_pixel_coord(AGrid_t *grid, uint16_t index);
-static uint16_t pixel_coord_to_grid_index(AGrid_t *grid, point_t coordinates);
+static point_t gridToPixel(AGrid_t *grid, uint16_t index);
+static uint16_t pixelToGrid(AGrid_t *grid, point_t coordinates);
 
-static size_t printable_enumerate(unsigned char *str, size_t norm_length);
+static size_t printableEnumerate(unsigned char *str, size_t norm_length);
 
-extern void ui_print_char(MBNA AGrid_t *grid, uint16_t index, unsigned char c, bool invert);
-extern void ui_print_string(MBNA AGrid_t *grid, uint16_t index, unsigned char *str, size_t len);
+extern void ui_PrintChar(MBNA AGrid_t *grid, uint16_t index, unsigned char c, bool invert);
+extern void ui_PrintString(MBNA AGrid_t *grid, uint16_t index, unsigned char *str, size_t len);
 
-extern void ui_print_horizontal_line(MBNA AGrid_t *grid, uint16_t y, unsigned char c);
+extern void v(MBNA AGrid_t *grid, uint16_t y, unsigned char c);
 // extern void ui_print_vertical(MBNA AGrid_t *grid, uint16_t x, unsigned char c);
 
-extern void ui_configure_grid(AGrid_t *grid, uint16_t width, uint16_t height, font_t font, uint8_t tabsize, uint16_t foreground, uint16_t background);
-extern void ui_show_grid_demo(MBNA AGrid_t *grid);
-extern void ui_draw(MBNA AGrid_t *grid, bool topside);
-extern void ui_update_status(MBNA AGrid_t *grid, unsigned char *status_text);
+extern void ui_GridConfigure(AGrid_t *grid, uint16_t width, uint16_t height, font_t font, uint8_t tabsize, uint16_t foreground, uint16_t background);
+extern void ui_ShowDemo(MBNA AGrid_t *grid);
+extern void ui_Draw(MBNA AGrid_t *grid, bool topside);
+extern void ui_UpdateStatus(MBNA AGrid_t *grid, unsigned char *status_text);
 
-static size_t ui_terminal_print_singular(MBNA AGrid_t *grid, unsigned char *string);
-extern int ui_terminal_print(MBNA AGrid_t *grid, unsigned char *string);
-extern int ui_terminal_reprint(MBNA AGrid_t *grid, unsigned char *string, uint8_t order);
-extern void ui_terminal_query(MBNA AGrid_t *grid, unsigned char *input, size_t input_max, size_t line);
+static size_t ui_TerminalPrintSingle(MBNA AGrid_t *grid, unsigned char *string);
+extern int ui_TerminalPrint(MBNA AGrid_t *grid, unsigned char *string);
+extern int ui_TerminalReprint(MBNA AGrid_t *grid, unsigned char *string, uint8_t order);
+extern void ui_TerminalQuery(MBNA AGrid_t *grid, unsigned char *input, size_t input_max, size_t line);
 
 #endif //__LUOS_USER_INTERFACE__

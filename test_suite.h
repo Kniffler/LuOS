@@ -9,7 +9,7 @@
 #include "ui.h"
 #include "config.h"
 
-extern void suite_ui_index(MBNA AGrid_t *grid, size_t x_step, size_t y_step);
-extern void suite_term(MBNA AGrid_t *grid);
+extern void suite_TestGrid(MBNA AGrid_t *grid, size_t x_step, size_t y_step);
+extern void suite_Terminal(MBNA AGrid_t *grid);
 
 #endif //__LUOS_TEST_SUITE__

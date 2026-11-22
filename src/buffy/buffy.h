@@ -104,12 +104,12 @@ static void spi_write16_colour_buf(const uint16_t *buffer, size_t len);
 static void spi_write_command(uint8_t cmd);
 static void spi_write_full_command(uint8_t cmd, int argc, ...);
 
-extern void lcd_display_show_top(void);
-extern void lcd_display_show_bot(void);
+extern void lcd_ShowDisplayTop(void);
+extern void lcd_ShowDisplayBot(void);
 
-extern void lcd_display_on(void);
-extern void lcd_display_off(void);
-extern void lcd_reset(void);
+extern void lcd_DisplayOn(void);
+extern void lcd_DisplayOff(void);
+extern void lcd_Reset(void);
 
 static void __not_in_flash_func(normalize_coords)(uint16_t *x1, uint16_t *y1, uint16_t *x2, uint16_t *y2);
 
@@ -117,27 +117,27 @@ static void __not_in_flash_func(define_spi_region)(uint16_t sx, uint16_t sy, uin
 
 extern void lcd_scroll(MBNA int lines, uint16_t x1, uint16_t x2, uint16_t y1, uint16_t y2);
 
-static int lcd_controller_init(void);
+static int lcd_controllerInit(void);
 
-extern int lcd_draw_1px(MBNA uint16_t x, uint16_t y, uint16_t colour);
-extern int lcd_draw_rect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour);
-extern int lcd_draw_image(MBNA uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height);
+extern int lcd_Draw1Pixel(MBNA uint16_t x, uint16_t y, uint16_t colour);
+extern int lcd_DrawRect(MBNA uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t colour);
+extern int lcd_DrawImage(MBNA uint16_t *buffer, size_t buf_length, uint16_t x, uint16_t y, uint16_t width, uint16_t height);
 
-static int lcd_draw_bitmap_partial(MBNA uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
-extern int lcd_draw_bitmap(MBNA uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
+static int lcd_DrawPartBitmap(MBNA uint8_t *buffer, size_t ignoreFirstXPixels, size_t skipXpixelsAfterLine, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
+extern int lcd_DrawBitmap(MBNA uint8_t *buffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t fc, uint16_t bc);
 
-static unsigned char* lcd_get_pointer_for_char_bitmap(unsigned char c, font_t font);
-extern int lcd_draw_char(MBNA char c, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint16_t fc, uint16_t bc);
+static unsigned char* lcd_Char2Bitmap(unsigned char c, font_t font);
+extern int lcd_DrawChar(MBNA char c, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint16_t fc, uint16_t bc);
 
 static void lcd_handle_xy_char(uint16_t *x, uint16_t *y, uint16_t x_limit, uint16_t y_limit, font_t font);
 static void lcd_handle_xy_char_reverse(uint16_t *x, uint16_t *y, uint16_t x_limit, uint16_t y_limit, font_t font);
-extern size_t lcd_draw_string(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc, bool *invert);
+extern size_t lcd_DrawString(MBNA unsigned char *str, size_t length, uint16_t x, uint16_t y, size_t cutoff_y, font_t font, uint8_t tabsize, uint16_t fc, uint16_t bc, bool *invert);
 
 
-extern void lcd_clear(MBNA uint16_t colour);
-extern int lcd_init(void);
+extern void lcd_Clear(MBNA uint16_t colour);
+extern int lcd_Init(void);
 
-extern uint16_t* lcd_buffer_create(void);
-extern void lcd_refresh(uint16_t *lcd_buffer);
+extern uint16_t* lcd_BufferCreate(void);
+extern void lcd_Refresh(uint16_t *lcd_buffer);
 
 #endif // __LUOS_BUFFY__

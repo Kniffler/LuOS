@@ -13,8 +13,8 @@
 
 #define I2C_KBD_ADDR 0x1F
 
-void init_i2c_kbd();
-int read_i2c_kbd();
-int read_battery();
+void kbd_Init();
+int kbd_Read();
+int kbd_Battery();
 
 #endif
